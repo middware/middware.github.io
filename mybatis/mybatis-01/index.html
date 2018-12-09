@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta name="generator" content="Hexo 3.8.0">
+    <meta charset="utf-8">
+<title>Mybatis代码生成+分页+Mapper继承扩展 - 许进沉思录-专注于互联网与中间件基础架构技术研究</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+
+
+    <meta name="description" content="摘要 本篇文章主要介绍使用mybatis-gennerator快速生成代码，但是每次生成的Mapper或接口都会覆盖自定义的Mapper，因此介绍了Mapper接口的继承方式解决，还介绍了如何使用分页工具使用pagehelper结合Mybatis快速实现分页。 一. mybatis-gennerator1.1 mybatis-gennerator自动生成代码1.1.1 mybatis-genner">
+<meta name="keywords" content="项目经验,MyBatis">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Mybatis代码生成+分页+Mapper继承扩展">
+<meta property="og:url" content="http://xujin.org/mybatis/mybatis-01/index.html">
+<meta property="og:site_name" content="许进沉思录-专注于互联网与中间件基础架构技术研究">
+<meta property="og:description" content="摘要 本篇文章主要介绍使用mybatis-gennerator快速生成代码，但是每次生成的Mapper或接口都会覆盖自定义的Mapper，因此介绍了Mapper接口的继承方式解决，还介绍了如何使用分页工具使用pagehelper结合Mybatis快速实现分页。 一. mybatis-gennerator1.1 mybatis-gennerator自动生成代码1.1.1 mybatis-genner">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2018-12-08T04:33:11.290Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Mybatis代码生成+分页+Mapper继承扩展">
+<meta name="twitter:description" content="摘要 本篇文章主要介绍使用mybatis-gennerator快速生成代码，但是每次生成的Mapper或接口都会覆盖自定义的Mapper，因此介绍了Mapper接口的继承方式解决，还介绍了如何使用分页工具使用pagehelper结合Mybatis快速实现分页。 一. mybatis-gennerator1.1 mybatis-gennerator自动生成代码1.1.1 mybatis-genner">
+
+
+
+
+
+<link rel="icon" href="/images/favicon.svg">
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.7.2/css/bulma.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:400,600|Source+Code+Pro">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css">
+<link rel="stylesheet" href="/css/style.css">
+
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css">
+    
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.css">
+    
+
+    
+    
+    
+    <style>body>.navbar,body>.section,body>.footer{opacity: 0}</style>
+    
+
+    
+    
+    
+    
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script>
+<style>
+.pace {
+  -webkit-pointer-events: none;
+  pointer-events: none;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.pace-inactive {
+  display: none;
+}
+
+.pace .pace-progress {
+  background: #3273dc;
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  right: 100%;
+  width: 100%;
+  height: 2px;
+}
+</style>
+
+    
+
+
+</head>
+<body class="is-3-column">
+    <nav class="navbar navbar-main">
+    <div class="container">
+        <div class="navbar-brand is-flex-center">
+            <a class="navbar-item navbar-logo" href="/">
+            
+                <img src="/images/logo.png" alt="" style="width: 55px;height: 55px;">
+            
+            </a>
+        </div>
+        <div class="navbar-menu">
+            
+            <div class="navbar-start">
+                
+                <a class="navbar-item" href="/.">首页</a>
+                
+                <a class="navbar-item" href="/archives">归档</a>
+                
+                <a class="navbar-item" href="/about">关于我</a>
+                
+                <a class="navbar-item" href="http://springcloud.cn">社区</a>
+                
+                <a class="navbar-item" href="http://halo.xujin.org">Halo</a>
+                
+                <a class="navbar-item" href="http://venusplus.cn">Venus+</a>
+                
+                <a class="navbar-item" href="http://xujin.org/sc/springcloud/">关于社区</a>
+                
+                <a class="navbar-item" href="http://xujin.org/md">工具</a>
+                
+            </div>
+            
+            <div class="navbar-end">
+                
+                    
+                    
+                    <a class="navbar-item" target="_blank" title="Download on GitHub" href="http://github.com/softwareking">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                    
+                
+                
+                <a class="navbar-item search" title="搜索" href="javascript:;">
+                    <i class="fas fa-search"></i>
+                </a>
+                
+            </div>
+        </div>
+    </div>
+</nav>
+    
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="column is-8-tablet is-8-desktop is-6-widescreen has-order-2 column-main"><div class="card">
+    
+    <div class="card-content article ">
+        <h1 class="title is-size-3 is-size-4-mobile has-text-weight-normal">
+            
+                Mybatis代码生成+分页+Mapper继承扩展
+            
+        </h1>
+        
+            <div class="level article-meta is-size-7 is-uppercase is-mobile is-overflow-x-auto">
+                <div class="level-left">
+                    <time class="level-item has-text-grey" datetime="2017-08-25T06:00:00.000Z">2017-08-25</time>
+                    
+                    <div class="level-item">
+                    <a class="has-link-grey -link" href="/categories/MyBatis/">MyBatis</a>
+                    </div>
+                    
+                    
+                    <span class="level-item has-text-grey">
+                        
+                        
+                        4 分钟 读完 (大约 660 个字)
+                    </span>
+                    
+                </div>
+            </div>
+            
+        <div class="content">
+            <p><strong>摘要</strong> 本篇文章主要介绍使用mybatis-gennerator快速生成代码，但是每次生成的Mapper或接口都会覆盖自定义的Mapper，因此介绍了Mapper接口的继承方式解决，还介绍了如何使用分页工具使用pagehelper结合Mybatis快速实现分页。</p>
+<h2 id="一-mybatis-gennerator"><a href="#一-mybatis-gennerator" class="headerlink" title="一. mybatis-gennerator"></a>一. mybatis-gennerator</h2><h3 id="1-1-mybatis-gennerator自动生成代码"><a href="#1-1-mybatis-gennerator自动生成代码" class="headerlink" title="1.1 mybatis-gennerator自动生成代码"></a>1.1 mybatis-gennerator自动生成代码</h3><h4 id="1-1-1-mybatis-gennerator的安装"><a href="#1-1-1-mybatis-gennerator的安装" class="headerlink" title="1.1.1 mybatis-gennerator的安装"></a>1.1.1 mybatis-gennerator的安装</h4><p>Mybatis-Generator的下载地址:<a href="https://github.com/mybatis/generator/releases" target="_blank" rel="noopener">https://github.com/mybatis/generator/releases</a></p>
+<ol>
+<li>在Eclipse安装mybatis-gennerator插件。</li>
+</ol>
+<blockquote>
+<p><a href="https://marketplace.eclipse.org/content/mybatis-generator" target="_blank" rel="noopener">https://marketplace.eclipse.org/content/mybatis-generator</a></p>
+</blockquote>
+<a id="more"></a>
+<p>2.在项目中安装Maven插件</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">build</span>&gt;</span> </span><br><span class="line">  <span class="tag">&lt;<span class="name">finalName</span>&gt;</span>janus-admin<span class="tag">&lt;/<span class="name">finalName</span>&gt;</span>  </span><br><span class="line">  <span class="tag">&lt;<span class="name">pluginManagement</span>&gt;</span> </span><br><span class="line">    <span class="tag">&lt;<span class="name">plugins</span>&gt;</span> </span><br><span class="line">      <span class="tag">&lt;<span class="name">plugin</span>&gt;</span> </span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.maven.plugins<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>maven-compiler-plugin<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">configuration</span>&gt;</span> </span><br><span class="line">          <span class="tag">&lt;<span class="name">source</span>&gt;</span>1.8<span class="tag">&lt;/<span class="name">source</span>&gt;</span>  </span><br><span class="line">          <span class="tag">&lt;<span class="name">target</span>&gt;</span>1.8<span class="tag">&lt;/<span class="name">target</span>&gt;</span> </span><br><span class="line">        <span class="tag">&lt;/<span class="name">configuration</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>3.3<span class="tag">&lt;/<span class="name">version</span>&gt;</span> </span><br><span class="line">      <span class="tag">&lt;/<span class="name">plugin</span>&gt;</span>  </span><br><span class="line">      <span class="tag">&lt;<span class="name">plugin</span>&gt;</span> </span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.mybatis.generator<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mybatis-generator-maven-plugin<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.3.2<span class="tag">&lt;/<span class="name">version</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">dependencies</span>&gt;</span> </span><br><span class="line">          <span class="tag">&lt;<span class="name">dependency</span>&gt;</span> </span><br><span class="line">            <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>mysql<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span>  </span><br><span class="line">            <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mysql-connector-java<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span>  </span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>6.0.6<span class="tag">&lt;/<span class="name">version</span>&gt;</span> </span><br><span class="line">          <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span> </span><br><span class="line">        <span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">configuration</span>&gt;</span> </span><br><span class="line">          <span class="comment">&lt;!--配置文件的路径 --&gt;</span>  </span><br><span class="line">          <span class="tag">&lt;<span class="name">configurationFile</span>&gt;</span>$&#123;basedir&#125;/generatorConfig.xml<span class="tag">&lt;/<span class="name">configurationFile</span>&gt;</span>  </span><br><span class="line">          <span class="tag">&lt;<span class="name">overwrite</span>&gt;</span>true<span class="tag">&lt;/<span class="name">overwrite</span>&gt;</span> </span><br><span class="line">        <span class="tag">&lt;/<span class="name">configuration</span>&gt;</span> </span><br><span class="line">      <span class="tag">&lt;/<span class="name">plugin</span>&gt;</span> </span><br><span class="line">    <span class="tag">&lt;/<span class="name">plugins</span>&gt;</span> </span><br><span class="line">  <span class="tag">&lt;/<span class="name">pluginManagement</span>&gt;</span> </span><br><span class="line"><span class="tag">&lt;/<span class="name">build</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>使用命令:mybatis-generator:generate生成</p>
+<blockquote>
+<p>推荐安装IDE插件的方式或者Maven插件的方式，生成的代码直接刷新工程即可</p>
+</blockquote>
+<p>generatorConfig.xml示例</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version="1.0" encoding="UTF-8" ?&gt;</span>  </span><br><span class="line"><span class="meta">&lt;!DOCTYPE generatorConfiguration PUBLIC "-//mybatis.org//DTD MyBatis Generator Configuration 1.0//EN" "http://mybatis.org/dtd/mybatis-generator-config_1_0.dtd" &gt;</span>  </span><br><span class="line"><span class="tag">&lt;<span class="name">generatorConfiguration</span>&gt;</span>  </span><br><span class="line">    <span class="comment">&lt;!-- 数据库驱动包位置 --&gt;</span>  </span><br><span class="line">    <span class="tag">&lt;<span class="name">classPathEntry</span>  </span></span><br><span class="line"><span class="tag">        <span class="attr">location</span>=<span class="string">"D:\develop\apache-maven-3.5.0\res\mysql\mysql-connector-java\5.1.35\mysql-connector-java-5.1.35.jar"</span> /&gt;</span>  </span><br><span class="line">    <span class="tag">&lt;<span class="name">context</span> <span class="attr">id</span>=<span class="string">"context1"</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">commentGenerator</span>&gt;</span>  </span><br><span class="line">            <span class="comment">&lt;!-- 是否去除自动生成的注释 true：是 ： false:否 --&gt;</span>  </span><br><span class="line">            <span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">"suppressAllComments"</span> <span class="attr">value</span>=<span class="string">"true"</span>/&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;/<span class="name">commentGenerator</span>&gt;</span>  </span><br><span class="line">        <span class="comment">&lt;!-- 数据库链接URL、用户名、密码 --&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">jdbcConnection</span> <span class="attr">driverClass</span>=<span class="string">"com.mysql.jdbc.Driver"</span>  </span></span><br><span class="line"><span class="tag">            <span class="attr">connectionURL</span>=<span class="string">"jdbc:mysql://主机:3306/数据库"</span> <span class="attr">userId</span>=<span class="string">"用户名"</span> <span class="attr">password</span>=<span class="string">"密码"</span> /&gt;</span>  </span><br><span class="line">        <span class="comment">&lt;!-- 生成模型的包名和位置 --&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">javaModelGenerator</span> <span class="attr">targetPackage</span>=<span class="string">"org.xujin.janus.admin.entity"</span> <span class="attr">targetProject</span>=<span class="string">"janus-admin/src/main/java"</span> /&gt;</span>  </span><br><span class="line">        <span class="comment">&lt;!-- 生成的映射文件报名和位置 --&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">sqlMapGenerator</span> <span class="attr">targetPackage</span>=<span class="string">"mapper"</span> <span class="attr">targetProject</span>=<span class="string">"janus-admin/src/main/resources"</span> /&gt;</span>  </span><br><span class="line">        <span class="comment">&lt;!-- 生成DAO的包名和位置 --&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">javaClientGenerator</span> <span class="attr">targetPackage</span>=<span class="string">"org.xujin.janus.admin.mapper"</span> <span class="attr">targetProject</span>=<span class="string">"janus-admin/src/main/java"</span> <span class="attr">type</span>=<span class="string">"XMLMAPPER"</span> /&gt;</span>  </span><br><span class="line">        </span><br><span class="line">        <span class="comment">&lt;!-- 要生成的那些表(更改tableName 和domainObjectName 就可以了) --&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;<span class="name">table</span> <span class="attr">schema</span>=<span class="string">"janus_admin"</span> <span class="attr">tableName</span>=<span class="string">"cluster"</span> <span class="attr">domainObjectName</span>=<span class="string">"Cluster"</span> <span class="attr">enableCountByExample</span>=<span class="string">"false"</span> <span class="attr">enableUpdateByExample</span>=<span class="string">"false"</span>  </span></span><br><span class="line"><span class="tag">            <span class="attr">enableDeleteByExample</span>=<span class="string">"false"</span> <span class="attr">enableSelectByExample</span>=<span class="string">"false"</span> <span class="attr">selectByExampleQueryId</span>=<span class="string">"false"</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;/<span class="name">table</span>&gt;</span>  </span><br><span class="line">        </span><br><span class="line">         <span class="tag">&lt;<span class="name">table</span> <span class="attr">schema</span>=<span class="string">"janus_admin"</span> <span class="attr">tableName</span>=<span class="string">"route_info"</span> <span class="attr">domainObjectName</span>=<span class="string">"RouteInfo"</span> <span class="attr">enableCountByExample</span>=<span class="string">"false"</span> <span class="attr">enableUpdateByExample</span>=<span class="string">"false"</span>  </span></span><br><span class="line"><span class="tag">            <span class="attr">enableDeleteByExample</span>=<span class="string">"false"</span> <span class="attr">enableSelectByExample</span>=<span class="string">"false"</span> <span class="attr">selectByExampleQueryId</span>=<span class="string">"false"</span>&gt;</span>  </span><br><span class="line">        <span class="tag">&lt;/<span class="name">table</span>&gt;</span></span><br><span class="line">        <span class="comment">&lt;!-- </span></span><br><span class="line"><span class="comment">           或者使用 tableName="%"通配全部生成</span></span><br><span class="line"><span class="comment">         &lt;table tableName="%" enableCountByExample="false" enableUpdateByExample="false"  </span></span><br><span class="line"><span class="comment">            enableDeleteByExample="false" enableSelectByExample="false" selectByExampleQueryId="false"&gt;</span></span><br><span class="line"><span class="comment">            &lt;!--mysql 配置--&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">generatedKey</span> <span class="attr">column</span>=<span class="string">"id"</span> <span class="attr">sqlStatement</span>=<span class="string">"Mysql"</span> <span class="attr">identity</span>=<span class="string">"true"</span>/&gt;</span></span><br><span class="line">            <span class="comment">&lt;!--oracle 配置--&gt;</span></span><br><span class="line">            <span class="comment">&lt;!--&lt;generatedKey column="id" sqlStatement="select SEQ_&#123;1&#125;.nextval from dual" identity="false" type="pre"/&gt;--&gt;</span></span><br><span class="line">       <span class="tag">&lt;/<span class="name">table</span>&gt;</span>  </span><br><span class="line">       --&gt;</span><br><span class="line">    <span class="tag">&lt;/<span class="name">context</span>&gt;</span>  </span><br><span class="line"><span class="tag">&lt;/<span class="name">generatorConfiguration</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<h2 id="二-Mybatis分页插件"><a href="#二-Mybatis分页插件" class="headerlink" title="二.Mybatis分页插件"></a>二.Mybatis分页插件</h2><h3 id="2-1-引入maven依赖"><a href="#2-1-引入maven依赖" class="headerlink" title="2.1 引入maven依赖"></a>2.1 引入maven依赖</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.github.pagehelper<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>pagehelper-spring-boot-starter<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">version</span>&gt;</span>1.1.3<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<h4 id="2-2-使用pagehelper"><a href="#2-2-使用pagehelper" class="headerlink" title="2.2 使用pagehelper"></a>2.2 使用pagehelper</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ExRouteInfoMapper</span> <span class="keyword">extends</span> <span class="title">RouteInfoMapper</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> List&lt;RouteInfo&gt; <span class="title">selectAll</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span></span><br><span class="line"><span class="comment">	 * 分页查询数据</span></span><br><span class="line"><span class="comment">	 * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="function">Page&lt;RouteInfo&gt; <span class="title">findByPage</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>业务层使用代码示li</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> PageInfo&lt;RouteInfo&gt; <span class="title">findByPage</span><span class="params">(<span class="keyword">int</span> pageNo, <span class="keyword">int</span> pageSize)</span> </span>&#123;</span><br><span class="line">	PageHelper.startPage(pageNo, pageSize);</span><br><span class="line">	Page&lt;RouteInfo&gt; pagelist = routeMapper.findByPage();</span><br><span class="line">	PageInfo&lt;RouteInfo&gt; pageInfo = <span class="keyword">new</span> PageInfo&lt;&gt;(pagelist);</span><br><span class="line">    <span class="keyword">return</span> pageInfo;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="三-Mybatis的Mapper继承"><a href="#三-Mybatis的Mapper继承" class="headerlink" title="三.Mybatis的Mapper继承"></a>三.Mybatis的Mapper继承</h2><h3 id="3-1-为什么使用Mapper继承"><a href="#3-1-为什么使用Mapper继承" class="headerlink" title="3.1 为什么使用Mapper继承"></a>3.1 为什么使用Mapper继承</h3><p>使用mybatis-gennerator自动生成代码，每次自动生成代码都会覆盖之前的Mapper文件，为了将自定义的Mapper和接口与生成的Mapper与接口分开，使用继承方式处理。</p>
+<h3 id="3-2-代码示例处理"><a href="#3-2-代码示例处理" class="headerlink" title="3.2 代码示例处理"></a>3.2 代码示例处理</h3><p>1.mybatis-gennerator自动生成的Mapper接口 </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">RouteInfoMapper</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">deleteByPrimaryKey</span><span class="params">(Long id)</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">insert</span><span class="params">(RouteInfo record)</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">insertSelective</span><span class="params">(RouteInfo record)</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="function">RouteInfo <span class="title">selectByPrimaryKey</span><span class="params">(Long id)</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">updateByPrimaryKeySelective</span><span class="params">(RouteInfo record)</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">updateByPrimaryKey</span><span class="params">(RouteInfo record)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>2.自动生成的Mapper文件</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd"&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">mapper</span> <span class="attr">namespace</span>=<span class="string">"org.xujin.janus.admin.mapper.RouteInfoMapper"</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">resultMap</span> <span class="attr">id</span>=<span class="string">"BaseResultMap"</span> <span class="attr">type</span>=<span class="string">"org.xujin.janus.admin.entity.RouteInfo"</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">id</span> <span class="attr">column</span>=<span class="string">"id"</span> <span class="attr">jdbcType</span>=<span class="string">"BIGINT"</span> <span class="attr">property</span>=<span class="string">"id"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">result</span> <span class="attr">column</span>=<span class="string">"domain_id"</span> <span class="attr">jdbcType</span>=<span class="string">"INTEGER"</span> <span class="attr">property</span>=<span class="string">"domainId"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">result</span> <span class="attr">column</span>=<span class="string">"type"</span> <span class="attr">jdbcType</span>=<span class="string">"VARCHAR"</span> <span class="attr">property</span>=<span class="string">"type"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">result</span> <span class="attr">column</span>=<span class="string">"name"</span> <span class="attr">jdbcType</span>=<span class="string">"VARCHAR"</span> <span class="attr">property</span>=<span class="string">"name"</span> /&gt;</span></span><br><span class="line">   </span><br><span class="line">  <span class="tag">&lt;/<span class="name">resultMap</span>&gt;</span></span><br><span class="line">  <span class="comment">&lt;!-- 其余省略 --&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">mapper</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>3.继承RouteInfoMapper扩展的接口</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ExRouteInfoMapper</span> <span class="keyword">extends</span> <span class="title">RouteInfoMapper</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> List&lt;RouteInfo&gt; <span class="title">selectAll</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span></span><br><span class="line"><span class="comment">	 * 分页查询数据</span></span><br><span class="line"><span class="comment">	 * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="function">Page&lt;RouteInfo&gt; <span class="title">findByPage</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>4.扩展的Mapper文件</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd"&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">mapper</span> <span class="attr">namespace</span>=<span class="string">"org.xujin.janus.admin.mapper.ex.ExRouteInfoMapper"</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">resultMap</span> <span class="attr">id</span>=<span class="string">"BaseResultMap"</span> <span class="attr">type</span>=<span class="string">"org.xujin.janus.admin.entity.RouteInfo"</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">id</span> <span class="attr">column</span>=<span class="string">"id"</span> <span class="attr">jdbcType</span>=<span class="string">"BIGINT"</span> <span class="attr">property</span>=<span class="string">"id"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">result</span> <span class="attr">column</span>=<span class="string">"domain_id"</span> <span class="attr">jdbcType</span>=<span class="string">"INTEGER"</span> <span class="attr">property</span>=<span class="string">"domainId"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">result</span> <span class="attr">column</span>=<span class="string">"type"</span> <span class="attr">jdbcType</span>=<span class="string">"VARCHAR"</span> <span class="attr">property</span>=<span class="string">"type"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">result</span> <span class="attr">column</span>=<span class="string">"name"</span> <span class="attr">jdbcType</span>=<span class="string">"VARCHAR"</span> <span class="attr">property</span>=<span class="string">"name"</span> /&gt;</span></span><br><span class="line">   </span><br><span class="line">  <span class="tag">&lt;/<span class="name">resultMap</span>&gt;</span></span><br><span class="line">  <span class="comment">&lt;!-- 其余省略 --&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">mapper</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>5.Service层依赖注入ExRouteInfoMapper使用</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@Transactional</span>(readOnly = <span class="keyword">true</span>)</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">RouteInfoServiceImpl</span> <span class="keyword">implements</span> <span class="title">RouteInfoService</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="meta">@Autowired</span></span><br><span class="line">	<span class="keyword">private</span> ExRouteInfoMapper routeMapper;</span><br><span class="line"></span><br><span class="line">	<span class="meta">@Override</span></span><br><span class="line">	<span class="meta">@Transactional</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">insert</span><span class="params">(RouteInfoModel routeInfoModel)</span> </span>&#123;</span><br><span class="line">		RouteInfo RouteInfo = BeanMapper.map(routeInfoModel, RouteInfo.class);</span><br><span class="line">		routeMapper.insert(RouteInfo);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+        </div>
+        
+        <div class="level is-size-7 is-uppercase">
+            <div class="level-start">
+                <div class="level-item">
+                    <span class="is-size-6 has-text-grey has-mr-7">#</span>
+                    <a class="has-link-grey -link" href="/tags/MyBatis/">MyBatis</a>, <a class="has-link-grey -link" href="/tags/项目经验/">项目经验</a>
+                </div>
+            </div>
+        </div>
+        
+        
+        
+    </div>
+</div>
+
+
+<div class="card card-transparent">
+    <div class="level post-navigation is-flex-wrap is-mobile">
+        
+        <div class="level-start">
+            <a class="level level-item has-link-grey  article-nav-prev" href="/bf/bf-th-sing/">
+                <i class="level-item fas fa-chevron-left"></i>
+                <span class="level-item">并发编程之ThreadLocal与单例的推荐写法</span>
+            </a>
+        </div>
+        
+        
+        <div class="level-end">
+            <a class="level level-item has-link-grey  article-nav-next" href="/sb/sb-01/">
+                <span class="level-item">Spring Boot杂谈总结(一)</span>
+                <i class="level-item fas fa-chevron-right"></i>
+            </a>
+        </div>
+        
+    </div>
+</div>
+
+
+</div>
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen  has-order-1 column-left">
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <nav class="level">
+            <div class="level-item has-text-centered">
+                <div>
+                    <img class="image is-128x128 has-mb-6" src="https://octodex.github.com/images/hula_loop_octodex03.gif">
+                    
+                    <p class="is-size-4 is-block">
+                        玹霖
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-block" style="margin-block-start: 1em;margin-block-end: 1em;margin-inline-start: 0px;margin-inline-end: 0px;">
+                        Spring Cloud中国社区创始人，
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-flex is-flex-center has-text-grey">
+                        <i class="fas fa-map-marker-alt has-mr-7"></i>
+                        <span>中国 上海</span>
+                    </p>
+                    
+                </div>
+            </div>
+        </nav>
+        <nav class="level is-mobile">
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        文章
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        108
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        分类
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        32
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        标签
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        44
+                    </p>
+                </div>
+            </div>
+        </nav>
+        <div class="level">
+            <a class="level-item button is-link is-rounded" href="http://github.com/ppoffice">
+                关注我</a>
+        </div>
+        
+        
+        <div class="level is-mobile">
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Github" href="http://github.com/softwareking">
+                
+                <i class="fab fa-github"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="linkedin" href="http://facebook.com">
+                
+                <i class="fab fa-facebook"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Twitter" href="http://twitter.com">
+                
+                <i class="fab fa-twitter"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Dribbble" href="http://dribbble.com">
+                
+                <i class="fab fa-dribbble"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="RSS" href="/">
+                
+                <i class="fas fa-rss"></i>
+                
+            </a>
+            
+        </div>
+        
+    </div>
+</div>
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                分类
+            </h3>
+            <ul class="menu-list">
+            <li>
+        <a class="level is-marginless" href="/categories/Configuration/">
+            <span class="level-start">
+                <span class="level-item">Configuration</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Configuration/Posts/">
+            <span class="level-start">
+                <span class="level-item">Posts</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Configuration/Theme/">
+            <span class="level-start">
+                <span class="level-item">Theme</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">4</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Eureka-Server/">
+            <span class="level-start">
+                <span class="level-item">Eureka Server</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Janus网关/">
+            <span class="level-start">
+                <span class="level-item">Janus网关</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/MyBatis/">
+            <span class="level-start">
+                <span class="level-item">MyBatis</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/">
+            <span class="level-start">
+                <span class="level-item">Plugins</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">18</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Plugins/Comment/">
+            <span class="level-start">
+                <span class="level-item">Comment</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/General/">
+            <span class="level-start">
+                <span class="level-item">General</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Search/">
+            <span class="level-start">
+                <span class="level-item">Search</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Share/">
+            <span class="level-start">
+                <span class="level-item">Share</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Boot/">
+            <span class="level-start">
+                <span class="level-item">Spring Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Eureka/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Eureka</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Gateway/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Gateway</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Sleuth/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Sleuth</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Translations/">
+            <span class="level-start">
+                <span class="level-item">Translations</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Venus-Boot/">
+            <span class="level-start">
+                <span class="level-item">Venus Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Widgets/">
+            <span class="level-start">
+                <span class="level-item">Widgets</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/dincos/">
+            <span class="level-start">
+                <span class="level-item">dincos</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/java/">
+            <span class="level-start">
+                <span class="level-item">java</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/tools/">
+            <span class="level-start">
+                <span class="level-item">tools</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/venus/">
+            <span class="level-start">
+                <span class="level-item">venus</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/中间件/">
+            <span class="level-start">
+                <span class="level-item">中间件</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/云计算Saas/">
+            <span class="level-start">
+                <span class="level-item">云计算Saas</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/代码片/">
+            <span class="level-start">
+                <span class="level-item">代码片</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/并发编程/">
+            <span class="level-start">
+                <span class="level-item">并发编程</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/沉思录/">
+            <span class="level-start">
+                <span class="level-item">沉思录</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/社区/">
+            <span class="level-start">
+                <span class="level-item">社区</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/跟我学Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">跟我学Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">8</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/重新定义/">
+            <span class="level-start">
+                <span class="level-item">重新定义</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/项目经验/">
+            <span class="level-start">
+                <span class="level-item">项目经验</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+    
+    
+        <div class="card card-transparent is-hidden-widescreen">
+        
+            <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#一-mybatis-gennerator">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>一. mybatis-gennerator</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#1-1-mybatis-gennerator自动生成代码">
+       <!-- <span class="has-mr-6">1.1</span>-->
+        <span>1.1 mybatis-gennerator自动生成代码</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#1-1-1-mybatis-gennerator的安装">
+       <!-- <span class="has-mr-6">1.1.1</span>-->
+        <span>1.1.1 mybatis-gennerator的安装</span>
+        </a></li></ul></li></ul></li><li>
+        <a class="is-flex" href="#二-Mybatis分页插件">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>二.Mybatis分页插件</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#2-1-引入maven依赖">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>2.1 引入maven依赖</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#2-2-使用pagehelper">
+       <!-- <span class="has-mr-6">2.1.1</span>-->
+        <span>2.2 使用pagehelper</span>
+        </a></li></ul></li></ul></li><li>
+        <a class="is-flex" href="#三-Mybatis的Mapper继承">
+       <!-- <span class="has-mr-6">3</span>-->
+        <span>三.Mybatis的Mapper继承</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#3-1-为什么使用Mapper继承">
+       <!-- <span class="has-mr-6">3.1</span>-->
+        <span>3.1 为什么使用Mapper继承</span>
+        </a></li><li>
+        <a class="is-flex" href="#3-2-代码示例处理">
+       <!-- <span class="has-mr-6">3.2</span>-->
+        <span>3.2 代码示例处理</span>
+        </a></li></ul></li></ul>
+        </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+        
+            
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+        
+        </div>
+    
+</div>
+
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen is-hidden-touch is-hidden-desktop-only has-order-3 column-right">
+    
+        <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#一-mybatis-gennerator">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>一. mybatis-gennerator</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#1-1-mybatis-gennerator自动生成代码">
+       <!-- <span class="has-mr-6">1.1</span>-->
+        <span>1.1 mybatis-gennerator自动生成代码</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#1-1-1-mybatis-gennerator的安装">
+       <!-- <span class="has-mr-6">1.1.1</span>-->
+        <span>1.1.1 mybatis-gennerator的安装</span>
+        </a></li></ul></li></ul></li><li>
+        <a class="is-flex" href="#二-Mybatis分页插件">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>二.Mybatis分页插件</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#2-1-引入maven依赖">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>2.1 引入maven依赖</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#2-2-使用pagehelper">
+       <!-- <span class="has-mr-6">2.1.1</span>-->
+        <span>2.2 使用pagehelper</span>
+        </a></li></ul></li></ul></li><li>
+        <a class="is-flex" href="#三-Mybatis的Mapper继承">
+       <!-- <span class="has-mr-6">3</span>-->
+        <span>三.Mybatis的Mapper继承</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#3-1-为什么使用Mapper继承">
+       <!-- <span class="has-mr-6">3.1</span>-->
+        <span>3.1 为什么使用Mapper继承</span>
+        </a></li><li>
+        <a class="is-flex" href="#3-2-代码示例处理">
+       <!-- <span class="has-mr-6">3.2</span>-->
+        <span>3.2 代码示例处理</span>
+        </a></li></ul></li></ul>
+        </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+    
+        
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+    
+    
+</div>
+
+            </div>
+        </div>
+    </section>
+    <footer class="footer">
+    <div class="container">
+        <div class="level">
+            <div class="level-start has-text-centered-mobile">
+                <a class="footer-logo is-block has-mb-6" href="/">
+                
+                    <img src="/images/logo.png" alt="" height="28">
+                
+                </a>
+                <p class="is-size-7">
+                &copy; 2018 许进&nbsp;
+                Powered by <a href="http://hexo.io/" target="_blank">Hexo</a> & <a href="http://github.com/ppoffice/hexo-theme-icarus">Icarus</a>
+                </p>
+            </div>
+            <div class="outer">
+                <div id="footer-info" class="inner">
+                    &copy;2018 许进<br>
+                    <a href="http://www.miibeian.gov.cn/" target="_blank">滇ICP备14007546号</a>
+                    Powered by <a href="http://blog.xujin.org" target="_blank">许进</a>. 
+                </div>
+                <span id="busuanzi_container_site_pv">
+                 访问量<span class="foot-count" id="busuanzi_value_site_pv"></span>次
+                 </span>
+                 <span class="foot-count" id="showDays"></span>
+            </div>
+            <div class="level-end">
+            
+                <div class="field has-addons is-flex-center-mobile has-mt-5-mobile is-flex-wrap is-flex-middle">
+                
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Creative Commons" href="https://creativecommons.org/">
+                        
+                        <i class="fab fa-creative-commons"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/">
+                        
+                        <i class="fab fa-creative-commons-by"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Download on GitHub" href="http://github.com/ppoffice/hexo-theme-icarus">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                </p>
+                
+                </div>
+            
+            </div>
+        </div>
+    </div>
+</footer>
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+ <script>
+        var birthDay = new Date('1/20/2015 18:34:23');
+        setInterval(function() {
+            var now = new Date();
+            var num_1 = 1000 * 60 * 60 * 24;
+            var num_2 = 1000 * 60 * 60;
+            var duration = now.getTime() - birthDay.getTime();
+            var total = Math.floor(duration / num_1);
+            var hour = Math.floor((duration % num_1) / num_2);
+            var minute = Math.floor(((duration % num_1) % num_2) / (1000 * 60));
+            var second = Math.floor((((duration % num_1) % num_2) % (1000 * 60)) / 1000);
+            document.getElementById("showDays").innerHTML = "本站已运行" + total + "天" + hour + '时' + minute + '分' + second + '秒';
+        }, 1000);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script>
+<script>moment.locale("zh-CN");</script>
+
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js"></script>
+    <script>
+        (function ($) {
+            $(document).ready(function () {
+                if (typeof($.fn.lightGallery) === 'function') {
+                    $('.article').lightGallery({ selector: '.gallery-item' });
+                }
+                if (typeof($.fn.justifiedGallery) === 'function') {
+                    $('.justified-gallery').justifiedGallery();
+                }
+            });
+        })(jQuery);
+    </script>
+    
+
+    
+    
+    
+    <div id="outdated">
+        <h6>Your browser is out-of-date!</h6>
+        <p>Update your browser to view this website correctly. <a id="btnUpdateBrowser" href="http://outdatedbrowser.com/">Update my browser now </a></p>
+        <p class="last"><a href="#" id="btnCloseUpdateBrowser" title="Close">&times;</a></p>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            // plugin function, place inside DOM ready function
+            outdatedBrowser({
+                bgColor: '#f25648',
+                color: '#ffffff',
+                lowerThan: 'flex'
+            })
+        });
+    </script>
+    
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/animejs@2.2.0/anime.js"></script>
+    <script>
+    function isIE() {
+        var ua = window.navigator.userAgent;
+        var msie = ua.indexOf('MSIE ');
+        var trident = ua.indexOf('Trident/');
+        return (msie > 0 || trident > 0);
+    }
+
+    $(document).ready(function () {
+        $('body>.navbar,body>.section,body>.footer').css('opacity', 1);
+        if (!isIE()) {
+            ['.column-main > .card',
+             '.column-left > .card',
+             '.column-right > .card'].map(function(target) {
+                anime({
+                    targets: target,
+                    scale: [0.8, 1],
+                    opacity: [0, 1],
+                    duration: 300,
+                    easing: 'easeOutSine',
+                    delay: function(el, i, l) {
+                        return i * 100;
+                    }
+                })
+            });
+
+            anime({
+                targets: '.navbar-main',
+                translateY: [-100, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutSine'
+            });
+        }
+    });
+    </script>
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.5/unpacked/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script>
+    MathJax.Hub.Config({
+        "HTML-CSS": {matchFontHeight: false},
+        SVG: {matchFontHeight: false},
+        CommonHTML: {matchFontHeight: false}
+    });
+</script>
+
+    
+    
+
+<a id="back-to-top" title="回到顶端" href="javascript:;">
+    <i class="fas fa-chevron-up"></i>
+</a>
+<style>
+#back-to-top {
+    position: fixed;
+    padding: 8px 0;
+    transition: 0.4s ease opacity, 0.4s ease width, 0.4s ease transform, 0.4s ease border-radius;
+    opacity: 0;
+    line-height: 24px;
+    outline: none;
+    transform: translateY(120px);
+}
+#back-to-top.fade-in {
+    opacity: 1;
+}
+#back-to-top.rise-up {
+    transform: translateY(0);
+}
+</style>
+<script src="/js/back-to-top.js"></script>
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+    
+
+
+<script src="/js/main.js"></script>
+
+    
+    <div class="searchbox ins-search">
+    <div class="searchbox-container ins-search-container">
+        <div class="searchbox-input-wrapper">
+            <input type="text" class="searchbox-input ins-search-input" placeholder="想要查找什么...">
+            <span class="searchbox-close ins-close ins-selectable"><i class="fa fa-times-circle"></i></span>
+        </div>
+        <div class="searchbox-result-wrapper ins-section-wrapper">
+            <div class="ins-section-container"></div>
+        </div>
+    </div>
+</div>
+<script>
+    (function (window) {
+        var INSIGHT_CONFIG = {
+            TRANSLATION: {
+                POSTS: '文章',
+                PAGES: '页面',
+                CATEGORIES: '分类',
+                TAGS: '标签',
+                UNTITLED: '(无标题)',
+            },
+            CONTENT_URL: '/content.json',
+        };
+        window.INSIGHT_CONFIG = INSIGHT_CONFIG;
+    })(window);
+</script>
+<script src="/js/insight.js"></script>
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/insight.css">
+    
+</body>
+</html>

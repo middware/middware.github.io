@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta name="generator" content="Hexo 3.8.0">
+    <meta charset="utf-8">
+<title>并发编程总结之synchronized细节问题 - 许进沉思录-专注于互联网与中间件基础架构技术研究</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+
+
+    <meta name="description" content="摘要:本节主要介绍了并发编程下怎么避免数据脏读和什么是synchronized的可重入锁，synchronized的可重入锁的几种使用场景下，是线程安全的。以及一些细节的synchronized使用问题和synchronized常见代码块示例Code可以直接Copy运行。  脏读什么是脏读   对于对象的同步和异步方法，我们在设计程序，一定要考虑问题的整体性，不然会出现数据不一致的错误，最经典的错">
+<meta name="keywords" content="并发编程,多线程">
+<meta property="og:type" content="article">
+<meta property="og:title" content="并发编程总结之synchronized细节问题">
+<meta property="og:url" content="http://xujin.org/bf/bf-synchronized/index.html">
+<meta property="og:site_name" content="许进沉思录-专注于互联网与中间件基础架构技术研究">
+<meta property="og:description" content="摘要:本节主要介绍了并发编程下怎么避免数据脏读和什么是synchronized的可重入锁，synchronized的可重入锁的几种使用场景下，是线程安全的。以及一些细节的synchronized使用问题和synchronized常见代码块示例Code可以直接Copy运行。  脏读什么是脏读   对于对象的同步和异步方法，我们在设计程序，一定要考虑问题的整体性，不然会出现数据不一致的错误，最经典的错">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2018-12-08T04:33:11.281Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="并发编程总结之synchronized细节问题">
+<meta name="twitter:description" content="摘要:本节主要介绍了并发编程下怎么避免数据脏读和什么是synchronized的可重入锁，synchronized的可重入锁的几种使用场景下，是线程安全的。以及一些细节的synchronized使用问题和synchronized常见代码块示例Code可以直接Copy运行。  脏读什么是脏读   对于对象的同步和异步方法，我们在设计程序，一定要考虑问题的整体性，不然会出现数据不一致的错误，最经典的错">
+
+
+
+
+
+<link rel="icon" href="/images/favicon.svg">
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.7.2/css/bulma.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:400,600|Source+Code+Pro">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css">
+<link rel="stylesheet" href="/css/style.css">
+
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css">
+    
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.css">
+    
+
+    
+    
+    
+    <style>body>.navbar,body>.section,body>.footer{opacity: 0}</style>
+    
+
+    
+    
+    
+    
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script>
+<style>
+.pace {
+  -webkit-pointer-events: none;
+  pointer-events: none;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.pace-inactive {
+  display: none;
+}
+
+.pace .pace-progress {
+  background: #3273dc;
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  right: 100%;
+  width: 100%;
+  height: 2px;
+}
+</style>
+
+    
+
+
+</head>
+<body class="is-3-column">
+    <nav class="navbar navbar-main">
+    <div class="container">
+        <div class="navbar-brand is-flex-center">
+            <a class="navbar-item navbar-logo" href="/">
+            
+                <img src="/images/logo.png" alt="" style="width: 55px;height: 55px;">
+            
+            </a>
+        </div>
+        <div class="navbar-menu">
+            
+            <div class="navbar-start">
+                
+                <a class="navbar-item" href="/.">首页</a>
+                
+                <a class="navbar-item" href="/archives">归档</a>
+                
+                <a class="navbar-item" href="/about">关于我</a>
+                
+                <a class="navbar-item" href="http://springcloud.cn">社区</a>
+                
+                <a class="navbar-item" href="http://halo.xujin.org">Halo</a>
+                
+                <a class="navbar-item" href="http://venusplus.cn">Venus+</a>
+                
+                <a class="navbar-item" href="http://xujin.org/sc/springcloud/">关于社区</a>
+                
+                <a class="navbar-item" href="http://xujin.org/md">工具</a>
+                
+            </div>
+            
+            <div class="navbar-end">
+                
+                    
+                    
+                    <a class="navbar-item" target="_blank" title="Download on GitHub" href="http://github.com/softwareking">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                    
+                
+                
+                <a class="navbar-item search" title="搜索" href="javascript:;">
+                    <i class="fas fa-search"></i>
+                </a>
+                
+            </div>
+        </div>
+    </div>
+</nav>
+    
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="column is-8-tablet is-8-desktop is-6-widescreen has-order-2 column-main"><div class="card">
+    
+    <div class="card-content article ">
+        <h1 class="title is-size-3 is-size-4-mobile has-text-weight-normal">
+            
+                并发编程总结之synchronized细节问题
+            
+        </h1>
+        
+            <div class="level article-meta is-size-7 is-uppercase is-mobile is-overflow-x-auto">
+                <div class="level-left">
+                    <time class="level-item has-text-grey" datetime="2016-07-26T13:00:00.000Z">2016-07-26</time>
+                    
+                    <div class="level-item">
+                    <a class="has-link-grey -link" href="/categories/并发编程/">并发编程</a>
+                    </div>
+                    
+                    
+                    <span class="level-item has-text-grey">
+                        
+                        
+                        19 分钟 读完 (大约 2917 个字)
+                    </span>
+                    
+                </div>
+            </div>
+            
+        <div class="content">
+            <p><strong>摘要</strong>:本节主要介绍了并发编程下怎么避免数据脏读和什么是synchronized的可重入锁，synchronized的可重入锁的几种使用场景下，是线程安全的。以及一些细节的synchronized使用问题和synchronized常见代码块示例Code可以直接Copy运行。</p>
+<hr>
+<h2 id="脏读"><a href="#脏读" class="headerlink" title="脏读"></a>脏读</h2><h3 id="什么是脏读"><a href="#什么是脏读" class="headerlink" title="什么是脏读"></a>什么是脏读</h3><p>   对于对象的同步和异步方法，我们在设计程序，一定要考虑问题的整体性，不然会出现数据不一致的错误，最经典的错误就是脏读(DirtyRead)。</p>
+<h3 id="示例Code"><a href="#示例Code" class="headerlink" title="示例Code"></a>示例Code</h3><p>业务整体需要使用完整的synchronized，保持业务的原子性。<br><a id="more"></a><br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 业务整体需要使用完整的synchronized，保持业务的原子性。</span></span><br><span class="line"><span class="comment"> * </span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> xujin</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DirtyRead</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String username = <span class="string">"xujin"</span>;</span><br><span class="line">    <span class="keyword">private</span> String password = <span class="string">"123"</span>;</span><br><span class="line">&lt;!--more--&gt;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">setValue</span><span class="params">(String username, String password)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.username = username;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">this</span>.password = password;</span><br><span class="line"></span><br><span class="line">        System.out.println(<span class="string">"setValue最终结果：username = "</span> + username + <span class="string">" , password = "</span> + password);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//①这里getValue没有加synchronized修饰</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">getValue</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"getValue方法得到：username = "</span> + <span class="keyword">this</span>.username + <span class="string">" , password = "</span> + <span class="keyword">this</span>.password);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> DirtyRead dr = <span class="keyword">new</span> DirtyRead();</span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                dr.setValue(<span class="string">"张三"</span>, <span class="string">"456"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        t1.start();</span><br><span class="line">        Thread.sleep(<span class="number">1000</span>);</span><br><span class="line"></span><br><span class="line">        dr.getValue();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>上面的Code中，getValue没有加synchronized修饰，打印结果如下,出现脏读<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">getValue方法得到：username = 张三 , password = 123</span><br><span class="line">setValue最终结果：username = 张三 , password = 456</span><br></pre></td></tr></table></figure></p>
+<p>只需在getValue加synchronized修饰，如下:<br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">getValue</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  System.out.println(<span class="string">"getValue方法得到：username = "</span> + <span class="keyword">this</span>.username + <span class="string">" , password = "</span> + <span class="keyword">this</span>.password);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>运行结果如下,没有造成数据脏读<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">setValue最终结果：username = 张三 , password = 456</span><br><span class="line">getValue方法得到：username = 张三 , password = 456</span><br></pre></td></tr></table></figure></p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p> 在我们对对象中的一个方法加锁的时候，需要考虑业务的或程序的整体性，也就是为程序中的set和get方法同时加锁synchronized同步关键字，保证业务的(service层)的原子性，不然会出现数据错误，脏读。</p>
+<h2 id="synchronized的重入"><a href="#synchronized的重入" class="headerlink" title="synchronized的重入"></a>synchronized的重入</h2><h3 id="什么是synchronized的重入锁"><a href="#什么是synchronized的重入锁" class="headerlink" title="什么是synchronized的重入锁"></a>什么是synchronized的重入锁</h3><ol>
+<li>synchronized,它拥有强制原子性的内置锁机制,是一个重入锁,所以在使用synchronized时,当一个线程请求得到一个对象锁后再次请求此对象锁,可以再次得到该对象锁,就是说在一个synchronized方法/块的内部调用本类的其他synchronized方法/块时，是永远可以拿到锁。</li>
+<li>当线程请求一个由其它线程持有的对象锁时，该线程会阻塞，而当线程请求由自己持有的对象锁时，如果该锁是重入锁,请求就会成功,否则阻塞.</li>
+</ol>
+<blockquote>
+<p>简单的说:关键字synchronized具有<code>锁重入</code>的功能，也就是在使用<code>synchronized时</code>，<code>当一个线程</code>得到一个<code>对象锁</code>的<code>锁后</code>，<code>再次请求此对象时</code>可以<code>再次</code>得到该<code>对象对应的锁</code>。</p>
+</blockquote>
+<h3 id="嵌套调用关系synchronized的重入"><a href="#嵌套调用关系synchronized的重入" class="headerlink" title="嵌套调用关系synchronized的重入"></a>嵌套调用关系synchronized的重入</h3><p>嵌套调用关系synchronized的重入也是线程安全的，下面是method1，method2，method3都被synchronized修饰，调用关系method1–&gt;method2–&gt;method3,也是线程安全的。<br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * synchronized的重入</span></span><br><span class="line"><span class="comment"> * </span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> xujin</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SyncReenTrant</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">method1</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"method1.."</span>);</span><br><span class="line">        method2();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">method2</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"method2.."</span>);</span><br><span class="line">        method3();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">method3</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"method3.."</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> SyncReenTrant sd = <span class="keyword">new</span> SyncReenTrant();</span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                sd.method1();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        t1.start();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure></p>
+<p>运行结果如下:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">method1..</span><br><span class="line">method2..</span><br><span class="line">method3..</span><br></pre></td></tr></table></figure></p>
+<h3 id="继承关系的synchronized的重入"><a href="#继承关系的synchronized的重入" class="headerlink" title="继承关系的synchronized的重入"></a>继承关系的synchronized的重入</h3><p>简单 Code1：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">public class Son extends Father &#123;</span><br><span class="line"></span><br><span class="line">    public synchronized void doSomething() &#123;</span><br><span class="line">        System.out.println(&quot;child.doSomething()&quot;);</span><br><span class="line">        // 调用自己类中其他的synchronized方法</span><br><span class="line">        doAnotherThing();</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    private synchronized void doAnotherThing() &#123;</span><br><span class="line">        // 调用父类的synchronized方法</span><br><span class="line">        super.doSomething();</span><br><span class="line">        System.out.println(&quot;child.doAnotherThing()&quot;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public static void main(String[] args) &#123;</span><br><span class="line">        Son child = new Son();</span><br><span class="line">        child.doSomething();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">class Father &#123;</span><br><span class="line">    public synchronized void doSomething() &#123;</span><br><span class="line">        System.out.println(&quot;father.doSomething()&quot;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>运行结果:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">child.doSomething()</span><br><span class="line">father.doSomething()</span><br><span class="line">child.doAnotherThing()</span><br></pre></td></tr></table></figure></p>
+<ol>
+<li>这里的对象锁只有一个,就是child对象的锁,当执行child.doSomething时，该线程获得child对象的锁，在doSomething方法内执行doAnotherThing时再次请求child对象的锁，因为synchronized是重入锁，所以可以得到该锁，继续在doAnotherThing里执行父类的doSomething方法时第三次请求child对象的锁，同理可得到，如果不是重入锁的话，那这后面这两次请求锁将会被一直阻塞，从而导致死锁。</li>
+<li>所以在Java内部，同一线程在调用自己类中其他synchronized方法/块或调用父类的synchronized方法/块都不会阻碍该线程的执行，就是说同一线程对同一个对象锁是可重入的，而且同一个线程可以获取同一把锁多次，也就是可以多次重入。因为java线程是基于“每线程（per-thread）”，而不是基于“每调用（per-invocation）”的（java中线程获得对象锁的操作是以每线程为粒度的，per-invocation互斥体获得对象锁的操作是以每调用作为粒度的）</li>
+</ol>
+<blockquote>
+<p>我们再来看看重入锁是怎么实现可重入性的，其实现方法是为每个锁关联一个线程持有者和计数器，当计数器为0时表示该锁没有被任何线程持有，那么任何线程都可能获得该锁而调用相应的方法；当某一线程请求成功后，JVM会记下锁的持有线程，并且将计数器置为1；此时其它线程请求该锁，则必须等待；而该持有锁的线程如果再次请求这个锁，就可以再次拿到这个锁，同时计数器会递增；当线程退出同步代码块时，计数器会递减，如果计数器为0，则释放该锁。</p>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SyncExtends</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 父类</span></span><br><span class="line">    <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Father</span> </span>&#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">int</span> i = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">operationSup</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                i--;</span><br><span class="line">                System.out.println(<span class="string">"Father print i = "</span> + i);</span><br><span class="line">                Thread.sleep(<span class="number">100</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 子类继承父类</span></span><br><span class="line">    <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Son</span> <span class="keyword">extends</span> <span class="title">Father</span> </span>&#123;</span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">operationSub</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">while</span> (i &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                    i--;</span><br><span class="line">                    System.out.println(<span class="string">"Son print i = "</span> + i);</span><br><span class="line">                    Thread.sleep(<span class="number">100</span>);</span><br><span class="line">                    <span class="keyword">this</span>.operationSup();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                Son sub = <span class="keyword">new</span> Son();</span><br><span class="line">                sub.operationSub();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"></span><br><span class="line">        t1.start();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>运行结果如下:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">Son print i = 9</span><br><span class="line">Father print i = 8</span><br><span class="line">Son print i = 7</span><br><span class="line">Father print i = 6</span><br><span class="line">Son print i = 5</span><br><span class="line">Father print i = 4</span><br><span class="line">Son print i = 3</span><br><span class="line">Father print i = 2</span><br><span class="line">Son print i = 1</span><br><span class="line">Father print i = 0</span><br></pre></td></tr></table></figure></p>
+<p>参考文章:<br><a href="http://blog.csdn.net/aigoogle/article/details/29893667" target="_blank" rel="noopener">http://blog.csdn.net/aigoogle/article/details/29893667</a></p>
+<h3 id="synchronized常见代码块"><a href="#synchronized常见代码块" class="headerlink" title="synchronized常见代码块"></a>synchronized常见代码块</h3><ol>
+<li>synchronized可以使用任意的Object进行加锁， 使用synchronized代码块加锁,比较灵活，如下代码所示:</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ObjectLock</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method1</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 对this当前ObjectLock实例对象加锁</span></span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                System.out.println(<span class="string">"do method1.."</span>);</span><br><span class="line">                Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method2</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 对ObjectLock类加锁</span></span><br><span class="line">        <span class="keyword">synchronized</span> (ObjectLock.class) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                System.out.println(<span class="string">"do method2.."</span>);</span><br><span class="line">                Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 任何对象锁</span></span><br><span class="line">    <span class="keyword">private</span> Object anyObjectlock = <span class="keyword">new</span> Object();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method3</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">synchronized</span> (anyObjectlock) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                System.out.println(<span class="string">"do method3.."</span>);</span><br><span class="line">                Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> ObjectLock objLock = <span class="keyword">new</span> ObjectLock();</span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                objLock.method1();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        Thread t2 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                objLock.method2();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        Thread t3 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                objLock.method3();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"></span><br><span class="line">        t1.start();</span><br><span class="line">        t2.start();</span><br><span class="line">        t3.start();</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>2.使用synchronized声明的方法在某些情况下，是有弊端的，比如A线程调用同步的方法执行一个很长时间的任务,那么B线程就必须等待很长的时间才可以执行，这样情况下可以使用synchronize的去优化代码执行时间，也就是我们通常所说的减小锁的粒度。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Optimize</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">doLongTimeTask</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line"></span><br><span class="line">            System.out.println(<span class="string">"当前线程开始："</span> + Thread.currentThread().getName() + <span class="string">", 正在执行一个较长时间的业务操作，其内容不需要同步"</span>);</span><br><span class="line">            Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">            <span class="comment">// 使用synchronized代码块减小锁的粒度，提高性能</span></span><br><span class="line">            <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">                System.out.println(<span class="string">"当前线程："</span> + Thread.currentThread().getName() + <span class="string">", 执行同步代码块，对其同步变量进行操作"</span>);</span><br><span class="line">                Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            System.out.println(<span class="string">"当前线程结束："</span> + Thread.currentThread().getName() + <span class="string">", 执行完毕"</span>);</span><br><span class="line"></span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> Optimize otz = <span class="keyword">new</span> Optimize();</span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                otz.doLongTimeTask();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">"t1"</span>);</span><br><span class="line">        Thread t2 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                otz.doLongTimeTask();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">"t2"</span>);</span><br><span class="line">        t1.start();</span><br><span class="line">        t2.start();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p> 执行结果:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">当前线程开始：t1, 正在执行一个较长时间的业务操作，其内容不需要同步</span><br><span class="line">当前线程开始：t2, 正在执行一个较长时间的业务操作，其内容不需要同步</span><br><span class="line">当前线程：t2, 执行同步代码块，对其同步变量进行操作</span><br><span class="line">当前线程结束：t2, 执行完毕</span><br><span class="line">当前线程：t1, 执行同步代码块，对其同步变量进行操作</span><br><span class="line">当前线程结束：t1, 执行完毕</span><br></pre></td></tr></table></figure>
+<p>3.注意就是不要使用String的常量加锁，会出现死循环问题。</p>
+<p>   synchronized代码块对字符串的锁，注意String常量池的缓存功能,示例代码如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">StringLock</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="keyword">synchronized</span> (<span class="string">"字符串常量"</span>) &#123;</span><br><span class="line">			<span class="keyword">try</span> &#123;</span><br><span class="line">				<span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line">					System.out.println(<span class="string">"当前线程 : "</span>  + Thread.currentThread().getName() + <span class="string">"开始"</span>);</span><br><span class="line">					Thread.sleep(<span class="number">1000</span>);		</span><br><span class="line">					System.out.println(<span class="string">"当前线程 : "</span>  + Thread.currentThread().getName() + <span class="string">"结束"</span>);</span><br><span class="line">				&#125;</span><br><span class="line">			&#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">				e.printStackTrace();</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">final</span> StringLock stringLock = <span class="keyword">new</span> StringLock();</span><br><span class="line">		Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">			<span class="meta">@Override</span></span><br><span class="line">			<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">				stringLock.method();</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;,<span class="string">"t1"</span>);</span><br><span class="line">		Thread t2 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">			<span class="meta">@Override</span></span><br><span class="line">			<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">				stringLock.method();</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;,<span class="string">"t2"</span>);</span><br><span class="line">		</span><br><span class="line">		t1.start();</span><br><span class="line">		t2.start();</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p> <strong>提示</strong>:运行结果是:<strong>t1线程一直死循环</strong>。<strong>t2线程不执行</strong>。修改为如下代码,t1和t2线程交替执行</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method</span><span class="params">()</span> </span>&#123;</span><br><span class="line">       <span class="comment">//把synchronized ("字符串常量") 修改为synchronized (new String("字符串常量"))</span></span><br><span class="line">       <span class="keyword">synchronized</span> (<span class="keyword">new</span> String(<span class="string">"字符串常量"</span>)) &#123;</span><br><span class="line">           <span class="keyword">try</span> &#123;</span><br><span class="line">               <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">                   System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">"开始"</span>);</span><br><span class="line">                   Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">                   System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">"结束"</span>);</span><br><span class="line">               &#125;</span><br><span class="line">           &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">               e.printStackTrace();</span><br><span class="line">           &#125;</span><br><span class="line">       &#125;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>4.锁对象的改变问题:<br>   当使用一个对象进行加锁的时候，要注意对象本身发生变化的时候，那么持有的锁就不同。如果对象本身不发生改变，那么依然是同步的，即使是对象的属性发生了变化。</p>
+<p>   4.1 示例代码1:<code>对象本身发生变化的时候,那么对象持有的锁就发生变化</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ChangeLock</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String lock = <span class="string">"lock"</span>;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">method</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">synchronized</span> (lock) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">"开始"</span>);</span><br><span class="line">                <span class="comment">// 这里把锁的内容改变了，因此t1,t2线程基本同时进来，而不是t1休眠2秒后，t2进来</span></span><br><span class="line">                lock = <span class="string">"change lock"</span>;</span><br><span class="line">                Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">                System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">"结束"</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> ChangeLock changeLock = <span class="keyword">new</span> ChangeLock();</span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                changeLock.method();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">"t1"</span>);</span><br><span class="line">        Thread t2 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                changeLock.method();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">"t2"</span>);</span><br><span class="line">        t1.start();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Thread.sleep(<span class="number">100</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        t2.start();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>   4.2 示例代码2:<code>同一对象属性的修改不会影响锁的情况</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ModifyLock</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> age;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getName</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> name;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setName</span><span class="params">(String name)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.name = name;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">getAge</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> age;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setAge</span><span class="params">(<span class="keyword">int</span> age)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.age = age;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">changeAttributte</span><span class="params">(String name, <span class="keyword">int</span> age)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">" 开始"</span>);</span><br><span class="line">            <span class="keyword">this</span>.setName(name);</span><br><span class="line">            <span class="keyword">this</span>.setAge(age);</span><br><span class="line"></span><br><span class="line">            System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">" 修改对象内容为： "</span> + <span class="keyword">this</span>.getName() + <span class="string">", "</span></span><br><span class="line">                    + <span class="keyword">this</span>.getAge());</span><br><span class="line"></span><br><span class="line">            Thread.sleep(<span class="number">2000</span>);</span><br><span class="line">            System.out.println(<span class="string">"当前线程 : "</span> + Thread.currentThread().getName() + <span class="string">" 结束"</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> ModifyLock modifyLock = <span class="keyword">new</span> ModifyLock();</span><br><span class="line">        Thread t1 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                modifyLock.changeAttributte(<span class="string">"许进"</span>, <span class="number">25</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">"t1"</span>);</span><br><span class="line">        Thread t2 = <span class="keyword">new</span> Thread(<span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                modifyLock.changeAttributte(<span class="string">"李四X"</span>, <span class="number">21</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">"t2"</span>);</span><br><span class="line"></span><br><span class="line">        t1.start();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Thread.sleep(<span class="number">100</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        t2.start();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>   运行结果:<br>   <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">当前线程 : t1 开始</span><br><span class="line">当前线程 : t1 修改对象内容为： 许进, 25</span><br><span class="line">当前线程 : t1 结束</span><br><span class="line">当前线程 : t2 开始</span><br><span class="line">当前线程 : t2 修改对象内容为： 李四X, 21</span><br><span class="line">当前线程 : t2 结束</span><br></pre></td></tr></table></figure></p>
+
+        </div>
+        
+        <div class="level is-size-7 is-uppercase">
+            <div class="level-start">
+                <div class="level-item">
+                    <span class="is-size-6 has-text-grey has-mr-7">#</span>
+                    <a class="has-link-grey -link" href="/tags/多线程/">多线程</a>, <a class="has-link-grey -link" href="/tags/并发编程/">并发编程</a>
+                </div>
+            </div>
+        </div>
+        
+        
+        
+    </div>
+</div>
+
+
+<div class="card card-transparent">
+    <div class="level post-navigation is-flex-wrap is-mobile">
+        
+        <div class="level-start">
+            <a class="level level-item has-link-grey  article-nav-prev" href="/bf/bf-volatile/">
+                <i class="level-item fas fa-chevron-left"></i>
+                <span class="level-item">并发编程总结之volatile</span>
+            </a>
+        </div>
+        
+        
+        <div class="level-end">
+            <a class="level level-item has-link-grey  article-nav-next" href="/bf/bf-multithread/">
+                <span class="level-item">并发编程总结之多线程基础</span>
+                <i class="level-item fas fa-chevron-right"></i>
+            </a>
+        </div>
+        
+    </div>
+</div>
+
+
+</div>
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen  has-order-1 column-left">
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <nav class="level">
+            <div class="level-item has-text-centered">
+                <div>
+                    <img class="image is-128x128 has-mb-6" src="https://octodex.github.com/images/hula_loop_octodex03.gif">
+                    
+                    <p class="is-size-4 is-block">
+                        玹霖
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-block" style="margin-block-start: 1em;margin-block-end: 1em;margin-inline-start: 0px;margin-inline-end: 0px;">
+                        Spring Cloud中国社区创始人，
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-flex is-flex-center has-text-grey">
+                        <i class="fas fa-map-marker-alt has-mr-7"></i>
+                        <span>中国 上海</span>
+                    </p>
+                    
+                </div>
+            </div>
+        </nav>
+        <nav class="level is-mobile">
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        文章
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        108
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        分类
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        32
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        标签
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        44
+                    </p>
+                </div>
+            </div>
+        </nav>
+        <div class="level">
+            <a class="level-item button is-link is-rounded" href="http://github.com/ppoffice">
+                关注我</a>
+        </div>
+        
+        
+        <div class="level is-mobile">
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Github" href="http://github.com/softwareking">
+                
+                <i class="fab fa-github"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="linkedin" href="http://facebook.com">
+                
+                <i class="fab fa-facebook"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Twitter" href="http://twitter.com">
+                
+                <i class="fab fa-twitter"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Dribbble" href="http://dribbble.com">
+                
+                <i class="fab fa-dribbble"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="RSS" href="/">
+                
+                <i class="fas fa-rss"></i>
+                
+            </a>
+            
+        </div>
+        
+    </div>
+</div>
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                分类
+            </h3>
+            <ul class="menu-list">
+            <li>
+        <a class="level is-marginless" href="/categories/Configuration/">
+            <span class="level-start">
+                <span class="level-item">Configuration</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Configuration/Posts/">
+            <span class="level-start">
+                <span class="level-item">Posts</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Configuration/Theme/">
+            <span class="level-start">
+                <span class="level-item">Theme</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">4</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Eureka-Server/">
+            <span class="level-start">
+                <span class="level-item">Eureka Server</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Janus网关/">
+            <span class="level-start">
+                <span class="level-item">Janus网关</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/MyBatis/">
+            <span class="level-start">
+                <span class="level-item">MyBatis</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/">
+            <span class="level-start">
+                <span class="level-item">Plugins</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">18</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Plugins/Comment/">
+            <span class="level-start">
+                <span class="level-item">Comment</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/General/">
+            <span class="level-start">
+                <span class="level-item">General</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Search/">
+            <span class="level-start">
+                <span class="level-item">Search</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Share/">
+            <span class="level-start">
+                <span class="level-item">Share</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Boot/">
+            <span class="level-start">
+                <span class="level-item">Spring Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Eureka/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Eureka</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Gateway/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Gateway</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Sleuth/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Sleuth</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Translations/">
+            <span class="level-start">
+                <span class="level-item">Translations</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Venus-Boot/">
+            <span class="level-start">
+                <span class="level-item">Venus Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Widgets/">
+            <span class="level-start">
+                <span class="level-item">Widgets</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/dincos/">
+            <span class="level-start">
+                <span class="level-item">dincos</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/java/">
+            <span class="level-start">
+                <span class="level-item">java</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/tools/">
+            <span class="level-start">
+                <span class="level-item">tools</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/venus/">
+            <span class="level-start">
+                <span class="level-item">venus</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/中间件/">
+            <span class="level-start">
+                <span class="level-item">中间件</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/云计算Saas/">
+            <span class="level-start">
+                <span class="level-item">云计算Saas</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/代码片/">
+            <span class="level-start">
+                <span class="level-item">代码片</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/并发编程/">
+            <span class="level-start">
+                <span class="level-item">并发编程</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/沉思录/">
+            <span class="level-start">
+                <span class="level-item">沉思录</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/社区/">
+            <span class="level-start">
+                <span class="level-item">社区</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/跟我学Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">跟我学Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">8</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/重新定义/">
+            <span class="level-start">
+                <span class="level-item">重新定义</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/项目经验/">
+            <span class="level-start">
+                <span class="level-item">项目经验</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+    
+    
+        <div class="card card-transparent is-hidden-widescreen">
+        
+            <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#脏读">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>脏读</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#什么是脏读">
+       <!-- <span class="has-mr-6">1.1</span>-->
+        <span>什么是脏读</span>
+        </a></li><li>
+        <a class="is-flex" href="#示例Code">
+       <!-- <span class="has-mr-6">1.2</span>-->
+        <span>示例Code</span>
+        </a></li><li>
+        <a class="is-flex" href="#小结">
+       <!-- <span class="has-mr-6">1.3</span>-->
+        <span>小结</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#synchronized的重入">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>synchronized的重入</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#什么是synchronized的重入锁">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>什么是synchronized的重入锁</span>
+        </a></li><li>
+        <a class="is-flex" href="#嵌套调用关系synchronized的重入">
+       <!-- <span class="has-mr-6">2.2</span>-->
+        <span>嵌套调用关系synchronized的重入</span>
+        </a></li><li>
+        <a class="is-flex" href="#继承关系的synchronized的重入">
+       <!-- <span class="has-mr-6">2.3</span>-->
+        <span>继承关系的synchronized的重入</span>
+        </a></li><li>
+        <a class="is-flex" href="#synchronized常见代码块">
+       <!-- <span class="has-mr-6">2.4</span>-->
+        <span>synchronized常见代码块</span>
+        </a></li></ul></li></ul>
+        </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+        
+            
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+        
+        </div>
+    
+</div>
+
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen is-hidden-touch is-hidden-desktop-only has-order-3 column-right">
+    
+        <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#脏读">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>脏读</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#什么是脏读">
+       <!-- <span class="has-mr-6">1.1</span>-->
+        <span>什么是脏读</span>
+        </a></li><li>
+        <a class="is-flex" href="#示例Code">
+       <!-- <span class="has-mr-6">1.2</span>-->
+        <span>示例Code</span>
+        </a></li><li>
+        <a class="is-flex" href="#小结">
+       <!-- <span class="has-mr-6">1.3</span>-->
+        <span>小结</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#synchronized的重入">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>synchronized的重入</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#什么是synchronized的重入锁">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>什么是synchronized的重入锁</span>
+        </a></li><li>
+        <a class="is-flex" href="#嵌套调用关系synchronized的重入">
+       <!-- <span class="has-mr-6">2.2</span>-->
+        <span>嵌套调用关系synchronized的重入</span>
+        </a></li><li>
+        <a class="is-flex" href="#继承关系的synchronized的重入">
+       <!-- <span class="has-mr-6">2.3</span>-->
+        <span>继承关系的synchronized的重入</span>
+        </a></li><li>
+        <a class="is-flex" href="#synchronized常见代码块">
+       <!-- <span class="has-mr-6">2.4</span>-->
+        <span>synchronized常见代码块</span>
+        </a></li></ul></li></ul>
+        </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+    
+        
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+    
+    
+</div>
+
+            </div>
+        </div>
+    </section>
+    <footer class="footer">
+    <div class="container">
+        <div class="level">
+            <div class="level-start has-text-centered-mobile">
+                <a class="footer-logo is-block has-mb-6" href="/">
+                
+                    <img src="/images/logo.png" alt="" height="28">
+                
+                </a>
+                <p class="is-size-7">
+                &copy; 2018 许进&nbsp;
+                Powered by <a href="http://hexo.io/" target="_blank">Hexo</a> & <a href="http://github.com/ppoffice/hexo-theme-icarus">Icarus</a>
+                </p>
+            </div>
+            <div class="outer">
+                <div id="footer-info" class="inner">
+                    &copy;2018 许进<br>
+                    <a href="http://www.miibeian.gov.cn/" target="_blank">滇ICP备14007546号</a>
+                    Powered by <a href="http://blog.xujin.org" target="_blank">许进</a>. 
+                </div>
+                <span id="busuanzi_container_site_pv">
+                 访问量<span class="foot-count" id="busuanzi_value_site_pv"></span>次
+                 </span>
+                 <span class="foot-count" id="showDays"></span>
+            </div>
+            <div class="level-end">
+            
+                <div class="field has-addons is-flex-center-mobile has-mt-5-mobile is-flex-wrap is-flex-middle">
+                
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Creative Commons" href="https://creativecommons.org/">
+                        
+                        <i class="fab fa-creative-commons"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/">
+                        
+                        <i class="fab fa-creative-commons-by"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Download on GitHub" href="http://github.com/ppoffice/hexo-theme-icarus">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                </p>
+                
+                </div>
+            
+            </div>
+        </div>
+    </div>
+</footer>
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+ <script>
+        var birthDay = new Date('1/20/2015 18:34:23');
+        setInterval(function() {
+            var now = new Date();
+            var num_1 = 1000 * 60 * 60 * 24;
+            var num_2 = 1000 * 60 * 60;
+            var duration = now.getTime() - birthDay.getTime();
+            var total = Math.floor(duration / num_1);
+            var hour = Math.floor((duration % num_1) / num_2);
+            var minute = Math.floor(((duration % num_1) % num_2) / (1000 * 60));
+            var second = Math.floor((((duration % num_1) % num_2) % (1000 * 60)) / 1000);
+            document.getElementById("showDays").innerHTML = "本站已运行" + total + "天" + hour + '时' + minute + '分' + second + '秒';
+        }, 1000);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script>
+<script>moment.locale("zh-CN");</script>
+
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js"></script>
+    <script>
+        (function ($) {
+            $(document).ready(function () {
+                if (typeof($.fn.lightGallery) === 'function') {
+                    $('.article').lightGallery({ selector: '.gallery-item' });
+                }
+                if (typeof($.fn.justifiedGallery) === 'function') {
+                    $('.justified-gallery').justifiedGallery();
+                }
+            });
+        })(jQuery);
+    </script>
+    
+
+    
+    
+    
+    <div id="outdated">
+        <h6>Your browser is out-of-date!</h6>
+        <p>Update your browser to view this website correctly. <a id="btnUpdateBrowser" href="http://outdatedbrowser.com/">Update my browser now </a></p>
+        <p class="last"><a href="#" id="btnCloseUpdateBrowser" title="Close">&times;</a></p>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            // plugin function, place inside DOM ready function
+            outdatedBrowser({
+                bgColor: '#f25648',
+                color: '#ffffff',
+                lowerThan: 'flex'
+            })
+        });
+    </script>
+    
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/animejs@2.2.0/anime.js"></script>
+    <script>
+    function isIE() {
+        var ua = window.navigator.userAgent;
+        var msie = ua.indexOf('MSIE ');
+        var trident = ua.indexOf('Trident/');
+        return (msie > 0 || trident > 0);
+    }
+
+    $(document).ready(function () {
+        $('body>.navbar,body>.section,body>.footer').css('opacity', 1);
+        if (!isIE()) {
+            ['.column-main > .card',
+             '.column-left > .card',
+             '.column-right > .card'].map(function(target) {
+                anime({
+                    targets: target,
+                    scale: [0.8, 1],
+                    opacity: [0, 1],
+                    duration: 300,
+                    easing: 'easeOutSine',
+                    delay: function(el, i, l) {
+                        return i * 100;
+                    }
+                })
+            });
+
+            anime({
+                targets: '.navbar-main',
+                translateY: [-100, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutSine'
+            });
+        }
+    });
+    </script>
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.5/unpacked/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script>
+    MathJax.Hub.Config({
+        "HTML-CSS": {matchFontHeight: false},
+        SVG: {matchFontHeight: false},
+        CommonHTML: {matchFontHeight: false}
+    });
+</script>
+
+    
+    
+
+<a id="back-to-top" title="回到顶端" href="javascript:;">
+    <i class="fas fa-chevron-up"></i>
+</a>
+<style>
+#back-to-top {
+    position: fixed;
+    padding: 8px 0;
+    transition: 0.4s ease opacity, 0.4s ease width, 0.4s ease transform, 0.4s ease border-radius;
+    opacity: 0;
+    line-height: 24px;
+    outline: none;
+    transform: translateY(120px);
+}
+#back-to-top.fade-in {
+    opacity: 1;
+}
+#back-to-top.rise-up {
+    transform: translateY(0);
+}
+</style>
+<script src="/js/back-to-top.js"></script>
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+    
+
+
+<script src="/js/main.js"></script>
+
+    
+    <div class="searchbox ins-search">
+    <div class="searchbox-container ins-search-container">
+        <div class="searchbox-input-wrapper">
+            <input type="text" class="searchbox-input ins-search-input" placeholder="想要查找什么...">
+            <span class="searchbox-close ins-close ins-selectable"><i class="fa fa-times-circle"></i></span>
+        </div>
+        <div class="searchbox-result-wrapper ins-section-wrapper">
+            <div class="ins-section-container"></div>
+        </div>
+    </div>
+</div>
+<script>
+    (function (window) {
+        var INSIGHT_CONFIG = {
+            TRANSLATION: {
+                POSTS: '文章',
+                PAGES: '页面',
+                CATEGORIES: '分类',
+                TAGS: '标签',
+                UNTITLED: '(无标题)',
+            },
+            CONTENT_URL: '/content.json',
+        };
+        window.INSIGHT_CONFIG = INSIGHT_CONFIG;
+    })(window);
+</script>
+<script src="/js/insight.js"></script>
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/insight.css">
+    
+</body>
+</html>

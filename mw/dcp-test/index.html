@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta name="generator" content="Hexo 3.8.0">
+    <meta charset="utf-8">
+<title>数据库连性池性能测试(hikariCP,druid,tomcat-jdbc,dbcp,c3p0) - 许进沉思录-专注于互联网与中间件基础架构技术研究</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+
+
+    <meta name="description" content="摘要: 本文根据唯品会中间件团队对外的测试报告整理，用于学习记录版权归原作者所有。主要是对这hikariCP,druid,tomcat-jdbc,dbcp,c3p0几种连接池的详细的功能和性能测试对比,通过这次测试对目前主流的一些连接池做一个全面的对比，从而给业务系统一个最佳的推荐。而唯品会venus-data支持三种连接池DBCP、C3P0、DRUID，其中C3P0作为默认的连接池。因此需要针对">
+<meta name="keywords" content="中间件,数据库连接池">
+<meta property="og:type" content="article">
+<meta property="og:title" content="数据库连性池性能测试(hikariCP,druid,tomcat-jdbc,dbcp,c3p0)">
+<meta property="og:url" content="http://xujin.org/mw/dcp-test/index.html">
+<meta property="og:site_name" content="许进沉思录-专注于互联网与中间件基础架构技术研究">
+<meta property="og:description" content="摘要: 本文根据唯品会中间件团队对外的测试报告整理，用于学习记录版权归原作者所有。主要是对这hikariCP,druid,tomcat-jdbc,dbcp,c3p0几种连接池的详细的功能和性能测试对比,通过这次测试对目前主流的一些连接池做一个全面的对比，从而给业务系统一个最佳的推荐。而唯品会venus-data支持三种连接池DBCP、C3P0、DRUID，其中C3P0作为默认的连接池。因此需要针对">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http://xujin.org/images/mw/dbc-pool/mock.png">
+<meta property="og:image" content="http://xujin.org/images/mw/dbc-pool/mysql.png">
+<meta property="og:image" content="http://xujin.org/images/mw/dbc-pool/query.png">
+<meta property="og:updated_time" content="2018-12-08T04:33:11.289Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="数据库连性池性能测试(hikariCP,druid,tomcat-jdbc,dbcp,c3p0)">
+<meta name="twitter:description" content="摘要: 本文根据唯品会中间件团队对外的测试报告整理，用于学习记录版权归原作者所有。主要是对这hikariCP,druid,tomcat-jdbc,dbcp,c3p0几种连接池的详细的功能和性能测试对比,通过这次测试对目前主流的一些连接池做一个全面的对比，从而给业务系统一个最佳的推荐。而唯品会venus-data支持三种连接池DBCP、C3P0、DRUID，其中C3P0作为默认的连接池。因此需要针对">
+<meta name="twitter:image" content="http://xujin.org/images/mw/dbc-pool/mock.png">
+
+
+
+
+
+<link rel="icon" href="/images/favicon.svg">
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.7.2/css/bulma.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:400,600|Source+Code+Pro">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css">
+<link rel="stylesheet" href="/css/style.css">
+
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css">
+    
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.css">
+    
+
+    
+    
+    
+    <style>body>.navbar,body>.section,body>.footer{opacity: 0}</style>
+    
+
+    
+    
+    
+    
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script>
+<style>
+.pace {
+  -webkit-pointer-events: none;
+  pointer-events: none;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.pace-inactive {
+  display: none;
+}
+
+.pace .pace-progress {
+  background: #3273dc;
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  right: 100%;
+  width: 100%;
+  height: 2px;
+}
+</style>
+
+    
+
+
+</head>
+<body class="is-3-column">
+    <nav class="navbar navbar-main">
+    <div class="container">
+        <div class="navbar-brand is-flex-center">
+            <a class="navbar-item navbar-logo" href="/">
+            
+                <img src="/images/logo.png" alt="" style="width: 55px;height: 55px;">
+            
+            </a>
+        </div>
+        <div class="navbar-menu">
+            
+            <div class="navbar-start">
+                
+                <a class="navbar-item" href="/.">首页</a>
+                
+                <a class="navbar-item" href="/archives">归档</a>
+                
+                <a class="navbar-item" href="/about">关于我</a>
+                
+                <a class="navbar-item" href="http://springcloud.cn">社区</a>
+                
+                <a class="navbar-item" href="http://halo.xujin.org">Halo</a>
+                
+                <a class="navbar-item" href="http://venusplus.cn">Venus+</a>
+                
+                <a class="navbar-item" href="http://xujin.org/sc/springcloud/">关于社区</a>
+                
+                <a class="navbar-item" href="http://xujin.org/md">工具</a>
+                
+            </div>
+            
+            <div class="navbar-end">
+                
+                    
+                    
+                    <a class="navbar-item" target="_blank" title="Download on GitHub" href="http://github.com/softwareking">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                    
+                
+                
+                <a class="navbar-item search" title="搜索" href="javascript:;">
+                    <i class="fas fa-search"></i>
+                </a>
+                
+            </div>
+        </div>
+    </div>
+</nav>
+    
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="column is-8-tablet is-8-desktop is-6-widescreen has-order-2 column-main"><div class="card">
+    
+    <div class="card-content article ">
+        <h1 class="title is-size-3 is-size-4-mobile has-text-weight-normal">
+            
+                数据库连性池性能测试(hikariCP,druid,tomcat-jdbc,dbcp,c3p0)
+            
+        </h1>
+        
+            <div class="level article-meta is-size-7 is-uppercase is-mobile is-overflow-x-auto">
+                <div class="level-left">
+                    <time class="level-item has-text-grey" datetime="2016-12-04T06:00:00.000Z">2016-12-04</time>
+                    
+                    <div class="level-item">
+                    <a class="has-link-grey -link" href="/categories/中间件/">中间件</a>
+                    </div>
+                    
+                    
+                    <span class="level-item has-text-grey">
+                        
+                        
+                        11 分钟 读完 (大约 1715 个字)
+                    </span>
+                    
+                </div>
+            </div>
+            
+        <div class="content">
+            <p><strong>摘要</strong>: <code>本文根据唯品会中间件团队对外的测试报告整理，用于学习记录版权归原作者所有。</code>主要是对这hikariCP,druid,tomcat-jdbc,dbcp,c3p0几种连接池的详细的功能和性能测试对比,通过这次测试对目前主流的一些连接池做一个全面的对比，从而给业务系统一个最佳的推荐。而唯品会venus-data支持三种连接池DBCP、C3P0、DRUID，其中C3P0作为默认的连接池。因此需要针对现状，研发一种分布式数据库连接池。<br><a id="more"></a></p>
+<h3 id="测试结论"><a href="#测试结论" class="headerlink" title="测试结论"></a>测试结论</h3><ol>
+<li>性能方面 hikariCP&gt;druid&gt;tomcat-jdbc&gt;dbcp&gt;c3p0 。hikariCP的高性能得益于最大限度的避免锁竞争。</li>
+<li>druid功能最为全面，sql拦截等功能，统计数据较为全面，具有良好的扩展性。</li>
+<li>综合考虑到目前venus已经支持druid且hikariCP并未发现有太多大规模的生产实践的案例，后续将推荐使用druid并把codegen生成的代码默认连接池为druid。</li>
+<li>可开启prepareStatement缓存，对性能会有大概10%的提升。</li>
+</ol>
+<h3 id="功能对比"><a href="#功能对比" class="headerlink" title="功能对比"></a>功能对比</h3><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>dbcp</th>
+<th>druid</th>
+<th>c3p0</th>
+<th>tomcat-jdbc</th>
+<th>HikariCP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>是否支持PSCache</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+<td>否</td>
+<td>否</td>
+</tr>
+<tr>
+<td>监控</td>
+<td>jmx</td>
+<td>jmx/log/http</td>
+<td>jmx,log</td>
+<td>jmx</td>
+<td>jmx</td>
+</tr>
+<tr>
+<td>扩展性</td>
+<td>弱</td>
+<td>好</td>
+<td>弱</td>
+<td>弱</td>
+<td>弱</td>
+</tr>
+<tr>
+<td>sql拦截及解析</td>
+<td>无</td>
+<td>支持</td>
+<td>无</td>
+<td>无</td>
+<td>无</td>
+</tr>
+<tr>
+<td>代码</td>
+<td>简单</td>
+<td>中等</td>
+<td>复杂</td>
+<td>简单</td>
+<td>简单</td>
+</tr>
+<tr>
+<td>更新时间</td>
+<td>2015.8.6</td>
+<td>2015.10.10</td>
+<td>2015.12.09</td>
+<td></td>
+<td>2015.12.3</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>依赖于common-pool</td>
+<td>阿里开源，功能全面</td>
+<td>历史久远，代码逻辑复杂，且不易维护</td>
+<td></td>
+<td>优化力度大，功能简单，起源于boneCP</td>
+</tr>
+<tr>
+<td>连接池管理</td>
+<td>LinkedBlockingDeque</td>
+<td>数组</td>
+<td></td>
+<td>FairBlockingQueue</td>
+<td>threadlocal+CopyOnWriteArrayList</td>
+</tr>
+<tr>
+<td>线程</td>
+<td>1个线程(心跳)</td>
+<td>2个线程</td>
+<td>4个</td>
+<td></td>
+<td>3个</td>
+</tr>
+</tbody>
+</table>
+<h4 id="线程的作用"><a href="#线程的作用" class="headerlink" title="线程的作用"></a>线程的作用</h4><ol>
+<li>dbcp：一个线程：负责心跳，最小连接数维持，最大空闲时间和防连接泄露。</li>
+<li>druid: 两个线程： 其中一个负责异步创建。一个负责最小连接数的维持。 其中心跳是通过获取连接，来判定是否小于心跳间隔。</li>
+<li>hikariCP: 三个线程： 其中一个为定时线程，解决最大空闲时间。两个为新建连接和关闭连接。 均是连接池，空闲5s，线程便会关闭。</li>
+<li>c3p0: 四个线程；三个helperThread （pollerThread）,一个定时AdminTaskTimer（DeadlockDetector）。<br>由于boneCP被hikariCP替代，并且已经不再更新，boneCP没有进行调研。<br>proxool网上有评测说在并发较高的情况下会出错，proxool便没有进行调研。<br>druid的功能比较全面，且扩展性较好，比较方便对jdbc接口进行监控跟踪等。<br>c3p0历史悠久，代码及其复杂，不利于维护。并且存在deadlock的潜在风险。</li>
+</ol>
+<h3 id="国内公司连接池使用情况"><a href="#国内公司连接池使用情况" class="headerlink" title="国内公司连接池使用情况"></a>国内公司连接池使用情况</h3><table>
+<thead>
+<tr>
+<th>公司</th>
+<th>数据库连接池</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>58同城</td>
+<td>自己开发</td>
+</tr>
+<tr>
+<td>滴滴</td>
+<td>druid dbcp</td>
+</tr>
+<tr>
+<td>知果果</td>
+<td>druid</td>
+</tr>
+<tr>
+<td>慧聪</td>
+<td>druid dbcp</td>
+</tr>
+<tr>
+<td>起步科技</td>
+<td>dbcp 和 druid</td>
+</tr>
+<tr>
+<td>亚信</td>
+<td>hikariCP</td>
+</tr>
+<tr>
+<td>唯品会</td>
+<td>dbcp,druid,c3p0（默认）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="性能测试"><a href="#性能测试" class="headerlink" title="性能测试"></a>性能测试</h3><h4 id="环境配置"><a href="#环境配置" class="headerlink" title="环境配置:"></a>环境配置:</h4><table>
+<thead>
+<tr>
+<th>CPU</th>
+<th>Intel(R) Xeon(R) CPU E5-2430 v2 @ 2.50GHz，24core</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>msyql version</td>
+<td>5.5.46</td>
+</tr>
+<tr>
+<td>tomcat-jdbc version</td>
+<td>8.0.28</td>
+</tr>
+<tr>
+<td>HikariCP version</td>
+<td>2.4.3</td>
+</tr>
+<tr>
+<td>c3p0 Version</td>
+<td>0.9.5-pre8</td>
+</tr>
+<tr>
+<td>dbcpVersion</td>
+<td>2.0.1</td>
+</tr>
+<tr>
+<td>druidVersion</td>
+<td>1.0.5</td>
+</tr>
+</tbody>
+</table>
+<h4 id="获取关闭连接性能测试"><a href="#获取关闭连接性能测试" class="headerlink" title="获取关闭连接性能测试"></a>获取关闭连接性能测试</h4><p>测试说明如下:</p>
+<ul>
+<li><p>初始连接和最小连接均为5，最大连接为20。在borrow和return均不心跳检测</p>
+</li>
+<li><p>其中打开关闭次数为: 100w次</p>
+</li>
+<li><p>测试用例和mysql在同一台机器上面，尽量避免io的影响</p>
+</li>
+<li><p>使用mock和连接mysql在不同线程并发下的响应时间</p>
+</li>
+</ul>
+<p><img src="/images/mw/dbc-pool/mock.png" alt="mock性能数据"><br>mock性能数据 (单位:ms)</p>
+<table>
+<thead>
+<tr>
+<th>连接池</th>
+<th>5ms</th>
+<th>20ms</th>
+<th>50ms</th>
+<th>100ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tomcat-jdbc</td>
+<td>442</td>
+<td>447</td>
+<td>1,013</td>
+<td>1,264</td>
+</tr>
+<tr>
+<td>c3p0</td>
+<td>4,480</td>
+<td>5,527</td>
+<td>7,449</td>
+<td>10,725</td>
+</tr>
+<tr>
+<td>dbcp</td>
+<td>676</td>
+<td>689</td>
+<td>867</td>
+<td>1,292</td>
+</tr>
+<tr>
+<td>hikari</td>
+<td>38</td>
+<td>33</td>
+<td>38</td>
+<td>30</td>
+</tr>
+<tr>
+<td>druid</td>
+<td>291</td>
+<td>293</td>
+<td>562</td>
+<td>985</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/mw/dbc-pool/mysql.png" alt="mysql性能数据"></p>
+<p>mysql性能数据 (单位:ms)</p>
+<table>
+<thead>
+<tr>
+<th>连接池</th>
+<th>5ms</th>
+<th>20ms</th>
+<th>50ms</th>
+<th>100ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tomcat-jdbc</td>
+<td>436</td>
+<td>453</td>
+<td>1,033</td>
+<td>1,291</td>
+</tr>
+<tr>
+<td>c3p0</td>
+<td>4,378</td>
+<td>5,726</td>
+<td>7,975</td>
+<td>10,948</td>
+</tr>
+<tr>
+<td>dbcp</td>
+<td>671</td>
+<td>679</td>
+<td>897</td>
+<td>1,380</td>
+</tr>
+<tr>
+<td>hikari</td>
+<td>96</td>
+<td>82</td>
+<td>87</td>
+<td>78</td>
+</tr>
+<tr>
+<td>druid</td>
+<td>304</td>
+<td>424</td>
+<td>690</td>
+<td>1,130</td>
+</tr>
+</tbody>
+</table>
+<p>测试结果：</p>
+<ul>
+<li>mock和mysql连接性能表现差不多，主要是由于初始化的时候建立了连接后期不再建立连接，和使用mock连接逻辑一致。 </li>
+<li>性能表现：hikariCP&gt;druid&gt;tomcat-jdbc&gt;dbcp&gt;c3p0。</li>
+<li>hikariCP 的性能及其优异。hikariCP号称java平台最快的数据库连接池。</li>
+<li>hikariCP在并发较高的情况下，性能基本上没有下降。</li>
+<li>c3p0连接池的性能很差，不建议使用该数据库连接池。</li>
+</ul>
+<p>hikariCP性能分析：</p>
+<ul>
+<li>hikariCP通过优化(concurrentBag，fastStatementList )集合来提高并发的读写效率。</li>
+<li>hikariCP使用threadlocal缓存连接及大量使用CAS的机制，最大限度的避免lock。单可能带来cpu使用率的上升。</li>
+<li>从字节码的维度优化代码。 (default inline threshold for a JVM running the server Hotspot compiler is 35 bytecodes ）让方法尽量在35个字节码一下，来提升jvm的处理效率。</li>
+</ul>
+<h4 id="查询一条语句性能测试"><a href="#查询一条语句性能测试" class="headerlink" title="查询一条语句性能测试"></a>查询一条语句性能测试</h4><p>测试说明：</p>
+<ul>
+<li>初始连接和最小连接均为8，最大连接为8。在borrow和return均不心跳检测</li>
+<li>测试在不同并发下查询的次数为10w次的总耗时对比，操作步骤为 1：打开连接 2：执行 ：select 3. 关闭连接</li>
+<li>测试用例和mysql在同一台机器上面，尽量避免io的影响</li>
+</ul>
+<p><img src="/images/mw/dbc-pool/query.png" alt="查询一条语句性能测试"></p>
+<p>测试数据：</p>
+<table>
+<thead>
+<tr>
+<th>连接池</th>
+<th>5ms</th>
+<th>8ms</th>
+<th>20ms</th>
+<th>50ms</th>
+<th>100ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tomcat-jdbc</td>
+<td>2,178</td>
+<td>1,495</td>
+<td>1,769</td>
+<td>1,818</td>
+<td>1,858</td>
+</tr>
+<tr>
+<td>c3p0</td>
+<td>3,237</td>
+<td>3,451</td>
+<td>4,488</td>
+<td>5,994</td>
+<td>7,906</td>
+</tr>
+<tr>
+<td>dbcp</td>
+<td>2,816</td>
+<td>1,935</td>
+<td>2,097</td>
+<td>2,243</td>
+<td>2,280</td>
+</tr>
+<tr>
+<td>hikari</td>
+<td>2,299</td>
+<td>1,546</td>
+<td>1,682</td>
+<td>1,751</td>
+<td>1,772</td>
+</tr>
+<tr>
+<td>druid</td>
+<td>2,297</td>
+<td>1,551</td>
+<td>1,800</td>
+<td>1,977</td>
+<td>2,032</td>
+</tr>
+</tbody>
+</table>
+<p>测试结果：</p>
+<ul>
+<li>在并发比较少的情况下，每个连接池的响应时间差不多。是由于并发少，基本上没有资源竞争。</li>
+<li>在并发较高的情况下，随着并发的升高，hikariCP响应时间基本上没有变动。</li>
+<li>c3p0随着并发的提高，性能急剧下降。</li>
+</ul>
+<h4 id="pscache性能对比"><a href="#pscache性能对比" class="headerlink" title="pscache性能对比"></a>pscache性能对比</h4><p>测试说明：</p>
+<ul>
+<li>通过druid进行设置pscache和不设置pscache的性能对比</li>
+<li>初始连接和最小连接均为8，最大连接为8。在borrow和return均不心跳检测。并且执行的并发数为8.</li>
+<li>查询10w次。查询流程为：1：建立连接，2：循环查询preparestatement语句 3：close连接</li>
+<li>测试用例和mysql在同一台机器上面，尽量避免io的影响</li>
+</ul>
+<p>测试数据：</p>
+<table>
+<thead>
+<tr>
+<th>cache</th>
+<th>1,927</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>not cache</td>
+<td>2,134</td>
+</tr>
+</tbody>
+</table>
+<p>测试结果：</p>
+<ul>
+<li>开启psCache缓存,性能大概有10%幅度的提升。可考虑开启pscache.</li>
+</ul>
+<p>测试说明：</p>
+<ul>
+<li>psCache是connection私有的，所以不存在线程竞争的问题，开启pscache不会存在竞争的性能损耗。</li>
+<li>psCache的key为prepare执行的sql和catalog等，value对应的为prepareStatement对象。开启缓存主要是减少了解析sql的开销。</li>
+</ul>
+
+        </div>
+        
+        <div class="level is-size-7 is-uppercase">
+            <div class="level-start">
+                <div class="level-item">
+                    <span class="is-size-6 has-text-grey has-mr-7">#</span>
+                    <a class="has-link-grey -link" href="/tags/中间件/">中间件</a>, <a class="has-link-grey -link" href="/tags/数据库连接池/">数据库连接池</a>
+                </div>
+            </div>
+        </div>
+        
+        
+        
+    </div>
+</div>
+
+
+<div class="card card-transparent">
+    <div class="level post-navigation is-flex-wrap is-mobile">
+        
+        <div class="level-start">
+            <a class="level level-item has-link-grey  article-nav-prev" href="/ex/eclipse-for-mac/">
+                <i class="level-item fas fa-chevron-left"></i>
+                <span class="level-item">Eclipse for Mac 快捷键</span>
+            </a>
+        </div>
+        
+        
+        <div class="level-end">
+            <a class="level level-item has-link-grey  article-nav-next" href="/sc/sc-fx1/">
+                <span class="level-item">爱油科技基于SpringCloud的微服务实践</span>
+                <i class="level-item fas fa-chevron-right"></i>
+            </a>
+        </div>
+        
+    </div>
+</div>
+
+
+</div>
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen  has-order-1 column-left">
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <nav class="level">
+            <div class="level-item has-text-centered">
+                <div>
+                    <img class="image is-128x128 has-mb-6" src="https://octodex.github.com/images/hula_loop_octodex03.gif">
+                    
+                    <p class="is-size-4 is-block">
+                        玹霖
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-block" style="margin-block-start: 1em;margin-block-end: 1em;margin-inline-start: 0px;margin-inline-end: 0px;">
+                        Spring Cloud中国社区创始人，
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-flex is-flex-center has-text-grey">
+                        <i class="fas fa-map-marker-alt has-mr-7"></i>
+                        <span>中国 上海</span>
+                    </p>
+                    
+                </div>
+            </div>
+        </nav>
+        <nav class="level is-mobile">
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        文章
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        108
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        分类
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        32
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        标签
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        44
+                    </p>
+                </div>
+            </div>
+        </nav>
+        <div class="level">
+            <a class="level-item button is-link is-rounded" href="http://github.com/ppoffice">
+                关注我</a>
+        </div>
+        
+        
+        <div class="level is-mobile">
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Github" href="http://github.com/softwareking">
+                
+                <i class="fab fa-github"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="linkedin" href="http://facebook.com">
+                
+                <i class="fab fa-facebook"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Twitter" href="http://twitter.com">
+                
+                <i class="fab fa-twitter"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Dribbble" href="http://dribbble.com">
+                
+                <i class="fab fa-dribbble"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="RSS" href="/">
+                
+                <i class="fas fa-rss"></i>
+                
+            </a>
+            
+        </div>
+        
+    </div>
+</div>
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                分类
+            </h3>
+            <ul class="menu-list">
+            <li>
+        <a class="level is-marginless" href="/categories/Configuration/">
+            <span class="level-start">
+                <span class="level-item">Configuration</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Configuration/Posts/">
+            <span class="level-start">
+                <span class="level-item">Posts</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Configuration/Theme/">
+            <span class="level-start">
+                <span class="level-item">Theme</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">4</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Eureka-Server/">
+            <span class="level-start">
+                <span class="level-item">Eureka Server</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Janus网关/">
+            <span class="level-start">
+                <span class="level-item">Janus网关</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/MyBatis/">
+            <span class="level-start">
+                <span class="level-item">MyBatis</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/">
+            <span class="level-start">
+                <span class="level-item">Plugins</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">18</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Plugins/Comment/">
+            <span class="level-start">
+                <span class="level-item">Comment</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/General/">
+            <span class="level-start">
+                <span class="level-item">General</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Search/">
+            <span class="level-start">
+                <span class="level-item">Search</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Share/">
+            <span class="level-start">
+                <span class="level-item">Share</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Boot/">
+            <span class="level-start">
+                <span class="level-item">Spring Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Eureka/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Eureka</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Gateway/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Gateway</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Sleuth/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Sleuth</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Translations/">
+            <span class="level-start">
+                <span class="level-item">Translations</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Venus-Boot/">
+            <span class="level-start">
+                <span class="level-item">Venus Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Widgets/">
+            <span class="level-start">
+                <span class="level-item">Widgets</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/dincos/">
+            <span class="level-start">
+                <span class="level-item">dincos</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/java/">
+            <span class="level-start">
+                <span class="level-item">java</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/tools/">
+            <span class="level-start">
+                <span class="level-item">tools</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/venus/">
+            <span class="level-start">
+                <span class="level-item">venus</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/中间件/">
+            <span class="level-start">
+                <span class="level-item">中间件</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/云计算Saas/">
+            <span class="level-start">
+                <span class="level-item">云计算Saas</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/代码片/">
+            <span class="level-start">
+                <span class="level-item">代码片</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/并发编程/">
+            <span class="level-start">
+                <span class="level-item">并发编程</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/沉思录/">
+            <span class="level-start">
+                <span class="level-item">沉思录</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/社区/">
+            <span class="level-start">
+                <span class="level-item">社区</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/跟我学Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">跟我学Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">8</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/重新定义/">
+            <span class="level-start">
+                <span class="level-item">重新定义</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/项目经验/">
+            <span class="level-start">
+                <span class="level-item">项目经验</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+    
+    
+        <div class="card card-transparent is-hidden-widescreen">
+        
+            <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#测试结论">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>测试结论</span>
+        </a></li><li>
+        <a class="is-flex" href="#功能对比">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>功能对比</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#线程的作用">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>线程的作用</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#国内公司连接池使用情况">
+       <!-- <span class="has-mr-6">3</span>-->
+        <span>国内公司连接池使用情况</span>
+        </a></li><li>
+        <a class="is-flex" href="#性能测试">
+       <!-- <span class="has-mr-6">4</span>-->
+        <span>性能测试</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#环境配置">
+       <!-- <span class="has-mr-6">4.1</span>-->
+        <span>环境配置:</span>
+        </a></li><li>
+        <a class="is-flex" href="#获取关闭连接性能测试">
+       <!-- <span class="has-mr-6">4.2</span>-->
+        <span>获取关闭连接性能测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#查询一条语句性能测试">
+       <!-- <span class="has-mr-6">4.3</span>-->
+        <span>查询一条语句性能测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#pscache性能对比">
+       <!-- <span class="has-mr-6">4.4</span>-->
+        <span>pscache性能对比</span>
+        </a></li></ul></li></ul>
+        </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+        
+            
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+        
+        </div>
+    
+</div>
+
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen is-hidden-touch is-hidden-desktop-only has-order-3 column-right">
+    
+        <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#测试结论">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>测试结论</span>
+        </a></li><li>
+        <a class="is-flex" href="#功能对比">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>功能对比</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#线程的作用">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>线程的作用</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#国内公司连接池使用情况">
+       <!-- <span class="has-mr-6">3</span>-->
+        <span>国内公司连接池使用情况</span>
+        </a></li><li>
+        <a class="is-flex" href="#性能测试">
+       <!-- <span class="has-mr-6">4</span>-->
+        <span>性能测试</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#环境配置">
+       <!-- <span class="has-mr-6">4.1</span>-->
+        <span>环境配置:</span>
+        </a></li><li>
+        <a class="is-flex" href="#获取关闭连接性能测试">
+       <!-- <span class="has-mr-6">4.2</span>-->
+        <span>获取关闭连接性能测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#查询一条语句性能测试">
+       <!-- <span class="has-mr-6">4.3</span>-->
+        <span>查询一条语句性能测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#pscache性能对比">
+       <!-- <span class="has-mr-6">4.4</span>-->
+        <span>pscache性能对比</span>
+        </a></li></ul></li></ul>
+        </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+    
+        
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+    
+    
+</div>
+
+            </div>
+        </div>
+    </section>
+    <footer class="footer">
+    <div class="container">
+        <div class="level">
+            <div class="level-start has-text-centered-mobile">
+                <a class="footer-logo is-block has-mb-6" href="/">
+                
+                    <img src="/images/logo.png" alt="" height="28">
+                
+                </a>
+                <p class="is-size-7">
+                &copy; 2018 唯品会中间件团队&nbsp;
+                Powered by <a href="http://hexo.io/" target="_blank">Hexo</a> & <a href="http://github.com/ppoffice/hexo-theme-icarus">Icarus</a>
+                </p>
+            </div>
+            <div class="outer">
+                <div id="footer-info" class="inner">
+                    &copy;2018 许进<br>
+                    <a href="http://www.miibeian.gov.cn/" target="_blank">滇ICP备14007546号</a>
+                    Powered by <a href="http://blog.xujin.org" target="_blank">许进</a>. 
+                </div>
+                <span id="busuanzi_container_site_pv">
+                 访问量<span class="foot-count" id="busuanzi_value_site_pv"></span>次
+                 </span>
+                 <span class="foot-count" id="showDays"></span>
+            </div>
+            <div class="level-end">
+            
+                <div class="field has-addons is-flex-center-mobile has-mt-5-mobile is-flex-wrap is-flex-middle">
+                
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Creative Commons" href="https://creativecommons.org/">
+                        
+                        <i class="fab fa-creative-commons"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/">
+                        
+                        <i class="fab fa-creative-commons-by"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Download on GitHub" href="http://github.com/ppoffice/hexo-theme-icarus">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                </p>
+                
+                </div>
+            
+            </div>
+        </div>
+    </div>
+</footer>
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+ <script>
+        var birthDay = new Date('1/20/2015 18:34:23');
+        setInterval(function() {
+            var now = new Date();
+            var num_1 = 1000 * 60 * 60 * 24;
+            var num_2 = 1000 * 60 * 60;
+            var duration = now.getTime() - birthDay.getTime();
+            var total = Math.floor(duration / num_1);
+            var hour = Math.floor((duration % num_1) / num_2);
+            var minute = Math.floor(((duration % num_1) % num_2) / (1000 * 60));
+            var second = Math.floor((((duration % num_1) % num_2) % (1000 * 60)) / 1000);
+            document.getElementById("showDays").innerHTML = "本站已运行" + total + "天" + hour + '时' + minute + '分' + second + '秒';
+        }, 1000);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script>
+<script>moment.locale("zh-CN");</script>
+
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js"></script>
+    <script>
+        (function ($) {
+            $(document).ready(function () {
+                if (typeof($.fn.lightGallery) === 'function') {
+                    $('.article').lightGallery({ selector: '.gallery-item' });
+                }
+                if (typeof($.fn.justifiedGallery) === 'function') {
+                    $('.justified-gallery').justifiedGallery();
+                }
+            });
+        })(jQuery);
+    </script>
+    
+
+    
+    
+    
+    <div id="outdated">
+        <h6>Your browser is out-of-date!</h6>
+        <p>Update your browser to view this website correctly. <a id="btnUpdateBrowser" href="http://outdatedbrowser.com/">Update my browser now </a></p>
+        <p class="last"><a href="#" id="btnCloseUpdateBrowser" title="Close">&times;</a></p>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            // plugin function, place inside DOM ready function
+            outdatedBrowser({
+                bgColor: '#f25648',
+                color: '#ffffff',
+                lowerThan: 'flex'
+            })
+        });
+    </script>
+    
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/animejs@2.2.0/anime.js"></script>
+    <script>
+    function isIE() {
+        var ua = window.navigator.userAgent;
+        var msie = ua.indexOf('MSIE ');
+        var trident = ua.indexOf('Trident/');
+        return (msie > 0 || trident > 0);
+    }
+
+    $(document).ready(function () {
+        $('body>.navbar,body>.section,body>.footer').css('opacity', 1);
+        if (!isIE()) {
+            ['.column-main > .card',
+             '.column-left > .card',
+             '.column-right > .card'].map(function(target) {
+                anime({
+                    targets: target,
+                    scale: [0.8, 1],
+                    opacity: [0, 1],
+                    duration: 300,
+                    easing: 'easeOutSine',
+                    delay: function(el, i, l) {
+                        return i * 100;
+                    }
+                })
+            });
+
+            anime({
+                targets: '.navbar-main',
+                translateY: [-100, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutSine'
+            });
+        }
+    });
+    </script>
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.5/unpacked/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script>
+    MathJax.Hub.Config({
+        "HTML-CSS": {matchFontHeight: false},
+        SVG: {matchFontHeight: false},
+        CommonHTML: {matchFontHeight: false}
+    });
+</script>
+
+    
+    
+
+<a id="back-to-top" title="回到顶端" href="javascript:;">
+    <i class="fas fa-chevron-up"></i>
+</a>
+<style>
+#back-to-top {
+    position: fixed;
+    padding: 8px 0;
+    transition: 0.4s ease opacity, 0.4s ease width, 0.4s ease transform, 0.4s ease border-radius;
+    opacity: 0;
+    line-height: 24px;
+    outline: none;
+    transform: translateY(120px);
+}
+#back-to-top.fade-in {
+    opacity: 1;
+}
+#back-to-top.rise-up {
+    transform: translateY(0);
+}
+</style>
+<script src="/js/back-to-top.js"></script>
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+    
+
+
+<script src="/js/main.js"></script>
+
+    
+    <div class="searchbox ins-search">
+    <div class="searchbox-container ins-search-container">
+        <div class="searchbox-input-wrapper">
+            <input type="text" class="searchbox-input ins-search-input" placeholder="想要查找什么...">
+            <span class="searchbox-close ins-close ins-selectable"><i class="fa fa-times-circle"></i></span>
+        </div>
+        <div class="searchbox-result-wrapper ins-section-wrapper">
+            <div class="ins-section-container"></div>
+        </div>
+    </div>
+</div>
+<script>
+    (function (window) {
+        var INSIGHT_CONFIG = {
+            TRANSLATION: {
+                POSTS: '文章',
+                PAGES: '页面',
+                CATEGORIES: '分类',
+                TAGS: '标签',
+                UNTITLED: '(无标题)',
+            },
+            CONTENT_URL: '/content.json',
+        };
+        window.INSIGHT_CONFIG = INSIGHT_CONFIG;
+    })(window);
+</script>
+<script src="/js/insight.js"></script>
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/insight.css">
+    
+</body>
+</html>

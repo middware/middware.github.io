@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta name="generator" content="Hexo 3.8.0">
+    <meta charset="utf-8">
+<title>在Spring Cloud中实现降级之权重路由和标签路由 - 许进沉思录-专注于互联网与中间件基础架构技术研究</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+
+
+    <meta name="description" content="限流、降级、灰度是服务治理的一个很重要的功能。 Dubbo自带服务降级、限流功能，spring cloud并没有提供此功 能，只能由我们自行实现。这里的限流、降级、灰度都是针对服务 实例级别，并不是整个服务级别，整个服务级别可以通过实例部署 数量来实现。">
+<meta name="keywords" content="Spring Cloud Ribbon">
+<meta property="og:type" content="article">
+<meta property="og:title" content="在Spring Cloud中实现降级之权重路由和标签路由">
+<meta property="og:url" content="http://xujin.org/sc/sc-ribbon-demoted/index.html">
+<meta property="og:site_name" content="许进沉思录-专注于互联网与中间件基础架构技术研究">
+<meta property="og:description" content="限流、降级、灰度是服务治理的一个很重要的功能。 Dubbo自带服务降级、限流功能，spring cloud并没有提供此功 能，只能由我们自行实现。这里的限流、降级、灰度都是针对服务 实例级别，并不是整个服务级别，整个服务级别可以通过实例部署 数量来实现。">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http://xujin.org/images/sc-study/sc-r-d02.png">
+<meta property="og:image" content="http://xujin.org/images/sc-study/sc-r-d03.png">
+<meta property="og:image" content="http://xujin.org/images/sc-study/sc-r-d01.png">
+<meta property="og:updated_time" content="2018-12-08T04:33:11.306Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="在Spring Cloud中实现降级之权重路由和标签路由">
+<meta name="twitter:description" content="限流、降级、灰度是服务治理的一个很重要的功能。 Dubbo自带服务降级、限流功能，spring cloud并没有提供此功 能，只能由我们自行实现。这里的限流、降级、灰度都是针对服务 实例级别，并不是整个服务级别，整个服务级别可以通过实例部署 数量来实现。">
+<meta name="twitter:image" content="http://xujin.org/images/sc-study/sc-r-d02.png">
+
+
+
+
+
+<link rel="icon" href="/images/favicon.svg">
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.7.2/css/bulma.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:400,600|Source+Code+Pro">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css">
+<link rel="stylesheet" href="/css/style.css">
+
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css">
+    
+
+    
+    
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.css">
+    
+
+    
+    
+    
+    <style>body>.navbar,body>.section,body>.footer{opacity: 0}</style>
+    
+
+    
+    
+    
+    
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script>
+<style>
+.pace {
+  -webkit-pointer-events: none;
+  pointer-events: none;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.pace-inactive {
+  display: none;
+}
+
+.pace .pace-progress {
+  background: #3273dc;
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  right: 100%;
+  width: 100%;
+  height: 2px;
+}
+</style>
+
+    
+
+
+</head>
+<body class="is-3-column">
+    <nav class="navbar navbar-main">
+    <div class="container">
+        <div class="navbar-brand is-flex-center">
+            <a class="navbar-item navbar-logo" href="/">
+            
+                <img src="/images/logo.png" alt="" style="width: 55px;height: 55px;">
+            
+            </a>
+        </div>
+        <div class="navbar-menu">
+            
+            <div class="navbar-start">
+                
+                <a class="navbar-item" href="/.">首页</a>
+                
+                <a class="navbar-item" href="/archives">归档</a>
+                
+                <a class="navbar-item" href="/about">关于我</a>
+                
+                <a class="navbar-item" href="http://springcloud.cn">社区</a>
+                
+                <a class="navbar-item" href="http://halo.xujin.org">Halo</a>
+                
+                <a class="navbar-item" href="http://venusplus.cn">Venus+</a>
+                
+                <a class="navbar-item" href="http://xujin.org/sc/springcloud/">关于社区</a>
+                
+                <a class="navbar-item" href="http://xujin.org/md">工具</a>
+                
+            </div>
+            
+            <div class="navbar-end">
+                
+                    
+                    
+                    <a class="navbar-item" target="_blank" title="Download on GitHub" href="http://github.com/softwareking">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                    
+                
+                
+                <a class="navbar-item search" title="搜索" href="javascript:;">
+                    <i class="fas fa-search"></i>
+                </a>
+                
+            </div>
+        </div>
+    </div>
+</nav>
+    
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="column is-8-tablet is-8-desktop is-6-widescreen has-order-2 column-main"><div class="card">
+    
+    <div class="card-content article ">
+        <h1 class="title is-size-3 is-size-4-mobile has-text-weight-normal">
+            
+                在Spring Cloud中实现降级之权重路由和标签路由
+            
+        </h1>
+        
+            <div class="level article-meta is-size-7 is-uppercase is-mobile is-overflow-x-auto">
+                <div class="level-left">
+                    <time class="level-item has-text-grey" datetime="2017-06-03T06:00:00.000Z">2017-06-03</time>
+                    
+                    <div class="level-item">
+                    <a class="has-link-grey -link" href="/categories/跟我学Spring-Cloud/">跟我学Spring Cloud</a>
+                    </div>
+                    
+                    
+                    <span class="level-item has-text-grey">
+                        
+                        
+                        27 分钟 读完 (大约 4003 个字)
+                    </span>
+                    
+                </div>
+            </div>
+            
+        <div class="content">
+            <p><strong>前言</strong> 限流、降级、灰度是服务治理的一个很重要的功能。本文参考<a href="http://www.jianshu.com/p/37ee1e84900a" target="_blank" rel="noopener">Spring Cloud中国社区的VIP会员-何鹰的博客-整理</a><br>Dubbo自带服务降级、限流功能，spring cloud并没有提供此功能，只能由我们自行实现。这里的限流、降级、灰度都是针对服务实例级别，并不是整个服务级别，整个服务级别可以通过实例部署数量来实现。</p>
+<h2 id="限流降级设计"><a href="#限流降级设计" class="headerlink" title="限流降级设计"></a>限流降级设计</h2><h3 id="场景"><a href="#场景" class="headerlink" title="场景"></a>场景</h3><p>服务A，部署了3个实例A1、A2、A3。spring cloud默认客户端负载均衡策略是采用轮询方式，A1、A2、A3三个实例流量均分，各1/3。如果这个时候需要将服务A由1.0版升级至2.0版，我们需要做的步骤是：将A1的流量降为0，柔性下线，关闭A1实例并升级到2.0，将A1流量提升为10%观察2.0线上运行情况，如果情况稳定，则逐步开放流量至不限制及1/3。依次在A2，A3上执行上述操作。<br>在上述步骤中，我们想让特别的人使用2.0，其他人还是使用1.0版，稳定后再全员开放。<br><a id="more"></a></p>
+<h3 id="思路"><a href="#思路" class="headerlink" title="思路"></a>思路</h3><p>分析，服务A的流量产生有两个方面，一个是外部流量，外网通过zuul过来的流量，一个是内部流量，服务间调用，服务B调用服务A的这类流量。不管是zuul还是内部服务来的，都是要通过ribbon做客户端负载均衡，我们可以修改ribbon负载均衡策略来实现上述限流、降级、灰度功能。</p>
+<p>要实现这些想法，我们需要对spring-cloud的各个组件、数据流非常熟悉，这样才能知道该在哪里做扩展。一个典型的调用：外网-》Zuul网关-》服务A-》服务B。。。</p>
+<p>spring-cloud跟dubbo一样都是客户端负载均衡，所有调用均由Ribbon来做负载均衡选择服务器，所有调用前后会套一层hystrix做隔离、熔断。服务间调用均用带LoadBalanced注解的RestTemplate发出。RestTemplate-》Ribbon-》hystrix</p>
+<p>通过上述分析我们可以看到，我们的扩展点就在Ribbon，Ribbon根据我们的规则，选择正确的服务器即可。</p>
+<p>我们先来一个dubbo自带的功能：基于权重的流量控制。dubbo自带的控制台可以设置服务实例粒度的半权，倍权。其实就是在客户端负载均衡时，选择服务器带上权重即可，spring-cloud默认是ZoneAvoidanceRule，优先选择相同Zone下的实例，实例间采用轮询方式做负载均衡。我们的想把基于轮询改为基于权重即可。接下来的问题是，每个实例的权重信息保存在哪里？从哪里取？dubbo放在zookeeper中，spring-cloud放在eureka中。我们只需从eureka拿每个实例的权重信息，然后根据权重来选择服务器即可。具体代码LabelAndWeightMetadataRule（先忽略里面的优先匹配label相关代码）。</p>
+<h2 id="工程案例演示"><a href="#工程案例演示" class="headerlink" title="工程案例演示"></a>工程案例演示</h2><p><img src="/images/sc-study/sc-r-d02.png" alt="工程目录"></p>
+<blockquote>
+<p><a href="https://github.com/SoftwareKing/spring-cloud-study/tree/master/sc-ribbon-demoted" target="_blank" rel="noopener">https://github.com/SoftwareKing/spring-cloud-study/tree/master/sc-ribbon-demoted</a></p>
+</blockquote>
+<h3 id="项目结构"><a href="#项目结构" class="headerlink" title="项目结构"></a>项目结构</h3><ol>
+<li><p>config 配置中心<br>端口：8888，方便起见直接读取配置文件，生产环境可以读取git。application-dev.properties为全局配置。先启动配置中心，所有服务的配置（包括注册中心的地址）均从配置中心读取。</p>
+</li>
+<li><p>consumer 服务消费者<br>端口：18090，调用服务提供者，为了演示header传递。</p>
+</li>
+<li><p>core 框架核心包<br>核心jar包，所有微服务均引用该包，使用AutoConfig实现免配置，模拟生产环境下spring-cloud的使用。</p>
+</li>
+<li><p>eureka 注册中心<br>端口：8761，/metadata端点实现metadata信息配置。</p>
+</li>
+<li><p>provider 服务提供者<br>端口：18090，服务提供者，无特殊逻辑。</p>
+</li>
+<li><p>zuul 网关<br>端口：8080，演示解析token获得label并放入header往后传递</p>
+</li>
+</ol>
+<h2 id="案例具体实现"><a href="#案例具体实现" class="headerlink" title="案例具体实现"></a>案例具体实现</h2><h3 id="基于权重的实现思路"><a href="#基于权重的实现思路" class="headerlink" title="基于权重的实现思路"></a>基于权重的实现思路</h3><p>LabelAndWeightMetadataRule写好了，那么我们如何使用它，使之生效呢？有3种方式。</p>
+<p>1）写个AutoConfig将LabelAndWeightMetadataRule声明成@Bean，用来替换默认的ZoneAvoidanceRule。这种方式在技术验证、开发测试阶段使用短平快。但是这种方式是强制全局设置，无法个性化。</p>
+<p>2）由于spring-cloud的Ribbon并没有实现netflix Ribbon的所有配置项。netflix配置全局rule方式为：ribbon.NFLoadBalancerRuleClassName=package.YourRule，spring-cloud并不支持，spring-cloud直接到服务粒度，只支持SERVICE_ID.ribbon.NFLoadBalancerRuleClassName=package.YourRule。</p>
+<blockquote>
+<p>我们可以扩展org.springframework.cloud.netflix.ribbon.PropertiesFactory修正spring cloud ribbon未能完全支持netflix ribbon配置的问题。这样我们可以将全局配置写到配置中心的application-dev.properties全局配置中，然后各个微服务还可以根据自身情况做个性化定制。但是PropertiesFactory属性均为私有，应该是spring cloud不建议在此扩展。参见<a href="https://github.com/spring-cloud/spring-cloud-netflix/issues/1741。" target="_blank" rel="noopener">https://github.com/spring-cloud/spring-cloud-netflix/issues/1741。</a></p>
+</blockquote>
+<p>3）使用spring cloud官方建议的@RibbonClient方式。该方式仅存在于spring-cloud单元测试中（在我提问后，现在还存在于spring-cloud issue list）。具体代码参见DefaultRibbonConfiguration.java、CoreAutoConfiguration.java。</p>
+<blockquote>
+<p>目前采用第三种方式处理</p>
+</blockquote>
+<h3 id="基于权重的路由测试"><a href="#基于权重的路由测试" class="headerlink" title="基于权重的路由测试"></a>基于权重的路由测试</h3><p>依次开启 config eureka provide（开两个实例，通过启动参数server.port指定不同端口区分） consumer zuul<br>访问 <a href="http://localhost:8761/metadata.html" target="_blank" rel="noopener">http://localhost:8761/metadata.html</a> 这是我手写的一个简单的metadata管理界面，分别设置两个provider实例的weight值（设置完需要一段2分钟才能生效），然后访问 <a href="http://localhost:8080/provider/user" target="_blank" rel="noopener">http://localhost:8080/provider/user</a> 多刷几次来测试zuul是否按权重发送请求，也可以访问 <a href="http://localhost:8080/consumer/test" target="_blank" rel="noopener">http://localhost:8080/consumer/test</a> 多刷几次来测试consumer是否按权重来调用provide服务。</p>
+<h3 id="基于标签的路由处理"><a href="#基于标签的路由处理" class="headerlink" title="基于标签的路由处理"></a>基于标签的路由处理</h3><p>基于权重的搞定之后，接下来才是重头戏：基于标签的路由。入口请求含有各种标签，然后我们可以根据标签幻化出各种各样的路由规则。例如只有标注为粉丝的用户才使用新版本（灰度、AB、金丝雀），例如标注为中国的用户请求必须发送到中国的服务器（全球部署），例如标注为写的请求必须发送到专门的写服务实例（读写分离），等等等等，唯一限制你的就是你的想象力。</p>
+<h4 id="基于标签的路由实现思路"><a href="#基于标签的路由实现思路" class="headerlink" title="基于标签的路由实现思路"></a>基于标签的路由实现思路</h4><p>根据标签的控制，我们当然放到之前写的Ribbon的rule中，每个实例配置的不同规则也是跟之前一样放到注册中心的metadata中。需要解决以下几个问题:</p>
+<p><strong>Q:关键是标签数据如何传过来?</strong></p>
+<blockquote>
+<p>A:权重随机的实现思路里面有答案，请求都通过zuul进来，因此我们可以在zuul里面给请求打标签，基于用户，IP或其他看你的需求，然后将标签信息放入ThreadLocal中，然后在Ribbon Rule中从ThreadLocal拿出来使用就可以了。</p>
+</blockquote>
+<blockquote>
+<p>然而，按照这个方式去实验时，发现有问题，拿不到ThreadLocal。原因是有hystrix这个东西，回忆下hystrix的原理，为了做到故障隔离，hystrix启用了自己的线程，不在同一个线程ThreadLocal失效。</p>
+</blockquote>
+<p>那么还有什么办法能够将标签信息一传到底呢，想想之前有没有人实现过类似的东西，没错sleuth，它的链路跟踪就能够将span传递下去，翻翻sleuth源码，找找其他资料，发现可以使用HystrixRequestVariableDefault，这里不建议直接使用HystrixConcurrencyStrategy，会和sleuth的strategy冲突。代码参见CoreHeaderInterceptor.java。现在可以测试zuul里面的rule，看能否拿到标签内容了。</p>
+<blockquote>
+<p>标签传到HystrixRequestVariableDefault这里的，如果项目中没有使用Hystrix就用不了了,这个时候需要做一个判断在restTemple里面做个判断，没有hystrix就直接threadlocal取。</p>
+</blockquote>
+<p><strong>Q:这里还不是终点，解决了zuul的路由，服务A调服务B这里的路由怎么处理呢？zuul算出来的标签如何往后面依次传递下去呢?</strong></p>
+<p>   我们还是抄sleuth：把标签放入header，服务A调服务B时，将服务A header里面的标签放到服务B的header里，依次传递下去。这里的关键点就是：内部的微服务在接收到发来的请求时(zuul-&gt;A，A-&gt;B）我们将请求放入ThreadLocal，哦，不对，是HystrixRequestVariableDefault，还记得上面说的原因么：）。<br>   这个容易处理，写一个spring mvc拦截器即可，代码参见CoreHeaderInterceptor。然后发送请求时自动带上这个里面保存的标签信息，参见RestTemplate的拦截器CoreHttpRequestInterceptor。到此为止，技术上全部走通实现。</p>
+<blockquote>
+<p>总结一下：zuul依据用户或IP等计算标签，并将标签放入header里向后传递，后续的微服务通过拦截器，将header里的标签放入RestTemplate请求的header里继续向后接力传递。标签的内容通过放入类似于ThreadLocal的全局变量（HystrixRequestVariableDefault），使Ribbon Rule可以使用。</p>
+</blockquote>
+<h3 id="基于标签路由的测试"><a href="#基于标签路由的测试" class="headerlink" title="基于标签路由的测试"></a>基于标签路由的测试</h3><p>参见PreFilter源码，模拟了几个用户的标签，参见LabelAndWeightMetadataRule源码，模拟了OR AND两种标签处理策略。依次开启 config eureka provide（开两个实例，通过启动参数server.port指定不同端口区分） consumer zuul.</p>
+<p><img src="/images/sc-study/sc-r-d03.png" alt="测试"></p>
+<hr>
+<p><img src="/images/sc-study/sc-r-d01.png" alt="测试"><br>访问 <a href="http://localhost:8761/metadata.html" target="_blank" rel="noopener">http://localhost:8761/metadata.html</a> 设置第一个provide 实例 orLabel为 CN,Test 发送请求头带入Authorization: emt 访问<a href="http://localhost:8080/provider/user" target="_blank" rel="noopener">http://localhost:8080/provider/user</a> 多刷几次，可以看到zuul所有请求均路由给了第一个实例。访问<a href="http://localhost:8080/consumer/test" target="_blank" rel="noopener">http://localhost:8080/consumer/test</a> 多刷几次，可以看到，consumer调用均路由给了第一个实例。</p>
+<p>设置第二个provide 实例 andLabel为 EN,Male 发送请求头带入Authorization: em 访问<a href="http://localhost:8080/provider/user" target="_blank" rel="noopener">http://localhost:8080/provider/user</a> 多刷几次，可以看到zuul所有请求均路由给了第二个实例。访问<a href="http://localhost:8080/consumer/test" target="_blank" rel="noopener">http://localhost:8080/consumer/test</a> 多刷几次，可以看到，consumer调用均路由给了第二个实例。</p>
+<p>Authorization头还可以设置为PreFilter里面的模拟token来做测试，至此所有内容讲解完毕，技术路线拉通，剩下的就是根据需求来完善你自己的路由策略啦。</p>
+<h2 id="伪代码分析实现流程"><a href="#伪代码分析实现流程" class="headerlink" title="伪代码分析实现流程"></a>伪代码分析实现流程</h2><h3 id="伪代码示例"><a href="#伪代码示例" class="headerlink" title="伪代码示例"></a>伪代码示例</h3><p>Ribbon默认采用ZoneAvoidanceRule，优先选择同zone下的实例。我们继承这个rule并扩展我们自己的限流功能，仔细阅读ZoneAvoidanceRule及其父类源码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">WeightedMetadataRule</span> <span class="keyword">extends</span> <span class="title">ZoneAvoidanceRule</span> </span>&#123;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String META_DATA_KEY_WEIGHT = <span class="string">"weight"</span>;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Server <span class="title">choose</span><span class="params">(Object key)</span> </span>&#123;</span><br><span class="line">    List&lt;Server&gt; serverList = <span class="keyword">this</span>.getPredicate().getEligibleServers(<span class="keyword">this</span>.getLoadBalancer().getAllServers(), key);</span><br><span class="line">    <span class="keyword">if</span> (CollectionUtils.isEmpty(serverList)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 计算总值并剔除0权重节点</span></span><br><span class="line">    <span class="keyword">int</span> sum = <span class="number">0</span>;</span><br><span class="line">    Map&lt;Server, Integer&gt; serverWeightMap = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">    <span class="keyword">for</span> (Server server : serverList) &#123;</span><br><span class="line">        String strWeight = ((DiscoveryEnabledServer) server).getInstanceInfo().getMetadata().get(META_DATA_KEY_WEIGHT);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span> weight = <span class="number">100</span>;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            weight = Integer.parseInt(strWeight);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            <span class="comment">// 无需处理</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (weight &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        serverWeightMap.put(server, weight);</span><br><span class="line">        sum += weight;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 权重随机</span></span><br><span class="line">    <span class="keyword">int</span> random = (<span class="keyword">int</span>) (Math.random() * sum);</span><br><span class="line">    <span class="keyword">int</span> current = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (Map.Entry&lt;Server, Integer&gt; entry : serverWeightMap.entrySet()) &#123;</span><br><span class="line">        current += entry.getValue();</span><br><span class="line">        <span class="keyword">if</span> (random &lt; current) &#123;</span><br><span class="line">            <span class="keyword">return</span> entry.getKey();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>使上述代码生效，在zuul网关中加入</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> IRule <span class="title">weightedMetadataRule</span><span class="params">()</span></span>&#123;</span><br><span class="line">   <span class="keyword">return</span> <span class="keyword">new</span> WeightedMetadataRule();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="代码示例测试"><a href="#代码示例测试" class="headerlink" title="代码示例测试"></a>代码示例测试</h3><p>打断点测试是否进入WeightedMetadataRule，开启多个服务A实例，通过zuul访问服务A。<br>成功进入断点，代码生效后，我们再来看如何指定metadata。<br>访问eureka restful API （我的eureka服务器端口为8100，修改为你自己的eureka端口）<br>Get <a href="http://localhost:8100/eureka/apps" target="_blank" rel="noopener">http://localhost:8100/eureka/apps</a><br>这个api可以看到所有服务<br>Get <a href="http://localhost:8100/eureka/apps/YOUR_SERVICE_NAME" target="_blank" rel="noopener">http://localhost:8100/eureka/apps/YOUR_SERVICE_NAME</a><br>这个api可以看到你的服务信息，包括部署了哪些实例<br>Get <a href="http://localhost:8100/eureka/apps/YOUR_SERVICE_NAME/INSTANCE_ID" target="_blank" rel="noopener">http://localhost:8100/eureka/apps/YOUR_SERVICE_NAME/INSTANCE_ID</a><br>这个api可以看到服务实例的信息，注意其中的metadata节点，目前为empty<br>Put <a href="http://localhost:8100/eureka/apps/YOUR_SERVICE_NAME/INSTANCE_ID/metadata?weight=10" target="_blank" rel="noopener">http://localhost:8100/eureka/apps/YOUR_SERVICE_NAME/INSTANCE_ID/metadata?weight=10</a><br>通过put方式可以修改metadata的内容，放入weight，设为10</p>
+<p>然后稍等两分钟，让zuul更新注册中心中的信息，接着重新访问，调试就可以看到metadata的内容了，并且也是按照权重随机来进行流量限制的，至此hello world搞定。</p>
+<h3 id="生产上使用WeightedMetadataRule"><a href="#生产上使用WeightedMetadataRule" class="headerlink" title="生产上使用WeightedMetadataRule"></a>生产上使用WeightedMetadataRule</h3><p>接下来，在生产环境中，我们如何应用这个WeightedMetadataRule呢，有如下几种方式：</p>
+<h3 id="手动指定服务策略，"><a href="#手动指定服务策略，" class="headerlink" title="手动指定服务策略，"></a>手动指定服务策略，</h3><p>spring cloud ribbon并没有完整实现netflix ribbon的所有配置功能，负载策略默认只能配置微服务级别，无法配置全局默认值。<br>例如：只能配置 SOME_SERVICE_ID.ribbon.NFLoadBalancerRuleClassName=package.WeightedMetadataRule<br>而不支持配置全局默认值 ribbon.NFLoadBalancerRuleClassName=package.WeightedMetadataRule<br>这种方案明显不符合我们的要求。</p>
+<h3 id="通过声明Irule-spring-bean配置全局负载策略"><a href="#通过声明Irule-spring-bean配置全局负载策略" class="headerlink" title="通过声明Irule spring bean配置全局负载策略"></a>通过声明Irule spring bean配置全局负载策略</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> IRule <span class="title">weightedMetadataRule</span><span class="params">()</span></span>&#123;</span><br><span class="line">   <span class="keyword">return</span> <span class="keyword">new</span> WeightedMetadataRule();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>这种方式也就是我们上面用的hello world方式，配置后强制所有微服务使用该策略，没有例外，微服务无法个性化定制策略，符合目前需求，但不适于长期规划。</p>
+</blockquote>
+<h3 id="继承重写PropertiesFactory"><a href="#继承重写PropertiesFactory" class="headerlink" title="继承重写PropertiesFactory"></a>继承重写PropertiesFactory</h3><p>继承重写org.springframework.cloud.netflix.ribbon.PropertiesFactory类，修正spring cloud ribbon未能完全支持netflix ribbon的问题。但是PropertiesFactory属性均为私有，应该是spring cloud不建议在此扩展。参见<a href="https://github.com/spring-cloud/spring-cloud-netflix/issues/1741" target="_blank" rel="noopener">https://github.com/spring-cloud/spring-cloud-netflix/issues/1741</a></p>
+<h3 id="使用spring-cloud官方建议的-RibbonClient方式"><a href="#使用spring-cloud官方建议的-RibbonClient方式" class="headerlink" title="使用spring cloud官方建议的@RibbonClient方式"></a>使用spring cloud官方建议的@RibbonClient方式</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@RibbonClients</span>(defaultConfiguration = DefaultRibbonConfiguration.class)</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DefaultRibbonConfiguration</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Value</span>(<span class="string">"$&#123;ribbon.client.name:#&#123;null&#125;&#125;"</span>)</span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Autowired</span>(required = <span class="keyword">false</span>)</span><br><span class="line">    <span class="keyword">private</span> IClientConfig config;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Autowired</span></span><br><span class="line">    <span class="keyword">private</span> PropertiesFactory propertiesFactory;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Bean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> IRule <span class="title">ribbonRule</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (StringUtils.isEmpty(name)) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span>.propertiesFactory.isSet(IRule.class, name)) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">this</span>.propertiesFactory.get(IRule.class, config, name);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 默认配置</span></span><br><span class="line">        WeightedMetadataRule rule = <span class="keyword">new</span> WeightedMetadataRule();</span><br><span class="line">        rule.initWithNiwsConfig(config);</span><br><span class="line">        <span class="keyword">return</span> rule;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>关于权重随机的性能，上述代码用的数组分段查找法，还可以采用TreeMap二分查找法。可以将权重数组或权重TreeMap缓存起来。<br>根据测试，在实例数量为50个时 缓存权重数组和权重TreeMap，数组分段查找百万次耗时78-125ms，TreeMap二分耗时50-80ms。</p>
+<p>这篇文章只是把技术打通，至于如何根据服务器负载情况，自动降级，限流等需求，只需要监控服务器状况，调用eureka接口设置metadata即可（其实我个人建议这方面需求通过docker的自动扩容缩容完成，只是有朋友问到如何通过spring cloud实现）。</p>
+<p>下一篇会写基于标签的流量控制。如何控制部分用户使用服务A2.0，其他用户使用服务A1.0。</p>
+<h2 id="参考文章"><a href="#参考文章" class="headerlink" title="参考文章"></a>参考文章</h2><p><a href="http://calvin1978.blogcn.com/articles/routing.html" target="_blank" rel="noopener">江南白衣-服务化之－路由</a><br><a href="http://www.jianshu.com/p/37ee1e84900a" target="_blank" rel="noopener">SpringCloud Ribbon 降级、限流、灰度发布</a></p>
+
+        </div>
+        
+        <div class="level is-size-7 is-uppercase">
+            <div class="level-start">
+                <div class="level-item">
+                    <span class="is-size-6 has-text-grey has-mr-7">#</span>
+                    <a class="has-link-grey -link" href="/tags/Spring-Cloud-Ribbon/">Spring Cloud Ribbon</a>
+                </div>
+            </div>
+        </div>
+        
+        
+        
+    </div>
+</div>
+
+
+<div class="card card-transparent">
+    <div class="level post-navigation is-flex-wrap is-mobile">
+        
+        <div class="level-start">
+            <a class="level level-item has-link-grey  article-nav-prev" href="/sc/sc-feign-4xx/">
+                <i class="level-item fas fa-chevron-left"></i>
+                <span class="level-item">Spring Cloud项目中通过Feign进行内部服务调用发生401\407错误无返回信息的问题</span>
+            </a>
+        </div>
+        
+        
+        <div class="level-end">
+            <a class="level level-item has-link-grey  article-nav-next" href="/sc/sc-fegin01/">
+                <span class="level-item">快速使用Spring Cloud Feign作为客户端调用服务提供者</span>
+                <i class="level-item fas fa-chevron-right"></i>
+            </a>
+        </div>
+        
+    </div>
+</div>
+
+
+</div>
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen  has-order-1 column-left">
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <nav class="level">
+            <div class="level-item has-text-centered">
+                <div>
+                    <img class="image is-128x128 has-mb-6" src="https://octodex.github.com/images/hula_loop_octodex03.gif">
+                    
+                    <p class="is-size-4 is-block">
+                        玹霖
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-block" style="margin-block-start: 1em;margin-block-end: 1em;margin-inline-start: 0px;margin-inline-end: 0px;">
+                        Spring Cloud中国社区创始人，
+                    </p>
+                    
+                    
+                    <p class="is-size-6 is-flex is-flex-center has-text-grey">
+                        <i class="fas fa-map-marker-alt has-mr-7"></i>
+                        <span>中国 上海</span>
+                    </p>
+                    
+                </div>
+            </div>
+        </nav>
+        <nav class="level is-mobile">
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        文章
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        108
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        分类
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        32
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered is-marginless">
+                <div>
+                    <p class="heading">
+                        标签
+                    </p>
+                    <p class="title has-text-weight-normal">
+                        44
+                    </p>
+                </div>
+            </div>
+        </nav>
+        <div class="level">
+            <a class="level-item button is-link is-rounded" href="http://github.com/ppoffice">
+                关注我</a>
+        </div>
+        
+        
+        <div class="level is-mobile">
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Github" href="http://github.com/softwareking">
+                
+                <i class="fab fa-github"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="linkedin" href="http://facebook.com">
+                
+                <i class="fab fa-facebook"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Twitter" href="http://twitter.com">
+                
+                <i class="fab fa-twitter"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="Dribbble" href="http://dribbble.com">
+                
+                <i class="fab fa-dribbble"></i>
+                
+            </a>
+            
+            <a class="level-item button is-white is-marginless" target="_blank" title="RSS" href="/">
+                
+                <i class="fas fa-rss"></i>
+                
+            </a>
+            
+        </div>
+        
+    </div>
+</div>
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                分类
+            </h3>
+            <ul class="menu-list">
+            <li>
+        <a class="level is-marginless" href="/categories/Configuration/">
+            <span class="level-start">
+                <span class="level-item">Configuration</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Configuration/Posts/">
+            <span class="level-start">
+                <span class="level-item">Posts</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Configuration/Theme/">
+            <span class="level-start">
+                <span class="level-item">Theme</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">4</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Eureka-Server/">
+            <span class="level-start">
+                <span class="level-item">Eureka Server</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Janus网关/">
+            <span class="level-start">
+                <span class="level-item">Janus网关</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/MyBatis/">
+            <span class="level-start">
+                <span class="level-item">MyBatis</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/">
+            <span class="level-start">
+                <span class="level-item">Plugins</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">18</span>
+            </span>
+        </a><ul><li>
+        <a class="level is-marginless" href="/categories/Plugins/Comment/">
+            <span class="level-start">
+                <span class="level-item">Comment</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/General/">
+            <span class="level-start">
+                <span class="level-item">General</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Search/">
+            <span class="level-start">
+                <span class="level-item">Search</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Plugins/Share/">
+            <span class="level-start">
+                <span class="level-item">Share</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li></ul></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Boot/">
+            <span class="level-start">
+                <span class="level-item">Spring Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">7</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Eureka/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Eureka</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Gateway/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Gateway</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Spring-Cloud-Sleuth/">
+            <span class="level-start">
+                <span class="level-item">Spring Cloud Sleuth</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Translations/">
+            <span class="level-start">
+                <span class="level-item">Translations</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Venus-Boot/">
+            <span class="level-start">
+                <span class="level-item">Venus Boot</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/Widgets/">
+            <span class="level-start">
+                <span class="level-item">Widgets</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/dincos/">
+            <span class="level-start">
+                <span class="level-item">dincos</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/java/">
+            <span class="level-start">
+                <span class="level-item">java</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/tools/">
+            <span class="level-start">
+                <span class="level-item">tools</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">3</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/venus/">
+            <span class="level-start">
+                <span class="level-item">venus</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/中间件/">
+            <span class="level-start">
+                <span class="level-item">中间件</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">2</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/云计算Saas/">
+            <span class="level-start">
+                <span class="level-item">云计算Saas</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/代码片/">
+            <span class="level-start">
+                <span class="level-item">代码片</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/并发编程/">
+            <span class="level-start">
+                <span class="level-item">并发编程</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">6</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/沉思录/">
+            <span class="level-start">
+                <span class="level-item">沉思录</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/社区/">
+            <span class="level-start">
+                <span class="level-item">社区</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">5</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/跟我学Spring-Cloud/">
+            <span class="level-start">
+                <span class="level-item">跟我学Spring Cloud</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">8</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/重新定义/">
+            <span class="level-start">
+                <span class="level-item">重新定义</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">1</span>
+            </span>
+        </a></li><li>
+        <a class="level is-marginless" href="/categories/项目经验/">
+            <span class="level-start">
+                <span class="level-item">项目经验</span>
+            </span>
+            <span class="level-end">
+                <span class="level-item tag">11</span>
+            </span>
+        </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+    
+    
+        <div class="card card-transparent is-hidden-widescreen">
+        
+            <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#限流降级设计">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>限流降级设计</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#场景">
+       <!-- <span class="has-mr-6">1.1</span>-->
+        <span>场景</span>
+        </a></li><li>
+        <a class="is-flex" href="#思路">
+       <!-- <span class="has-mr-6">1.2</span>-->
+        <span>思路</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#工程案例演示">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>工程案例演示</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#项目结构">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>项目结构</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#案例具体实现">
+       <!-- <span class="has-mr-6">3</span>-->
+        <span>案例具体实现</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#基于权重的实现思路">
+       <!-- <span class="has-mr-6">3.1</span>-->
+        <span>基于权重的实现思路</span>
+        </a></li><li>
+        <a class="is-flex" href="#基于权重的路由测试">
+       <!-- <span class="has-mr-6">3.2</span>-->
+        <span>基于权重的路由测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#基于标签的路由处理">
+       <!-- <span class="has-mr-6">3.3</span>-->
+        <span>基于标签的路由处理</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#基于标签的路由实现思路">
+       <!-- <span class="has-mr-6">3.3.1</span>-->
+        <span>基于标签的路由实现思路</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#基于标签路由的测试">
+       <!-- <span class="has-mr-6">3.4</span>-->
+        <span>基于标签路由的测试</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#伪代码分析实现流程">
+       <!-- <span class="has-mr-6">4</span>-->
+        <span>伪代码分析实现流程</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#伪代码示例">
+       <!-- <span class="has-mr-6">4.1</span>-->
+        <span>伪代码示例</span>
+        </a></li><li>
+        <a class="is-flex" href="#代码示例测试">
+       <!-- <span class="has-mr-6">4.2</span>-->
+        <span>代码示例测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#生产上使用WeightedMetadataRule">
+       <!-- <span class="has-mr-6">4.3</span>-->
+        <span>生产上使用WeightedMetadataRule</span>
+        </a></li><li>
+        <a class="is-flex" href="#手动指定服务策略，">
+       <!-- <span class="has-mr-6">4.4</span>-->
+        <span>手动指定服务策略，</span>
+        </a></li><li>
+        <a class="is-flex" href="#通过声明Irule-spring-bean配置全局负载策略">
+       <!-- <span class="has-mr-6">4.5</span>-->
+        <span>通过声明Irule spring bean配置全局负载策略</span>
+        </a></li><li>
+        <a class="is-flex" href="#继承重写PropertiesFactory">
+       <!-- <span class="has-mr-6">4.6</span>-->
+        <span>继承重写PropertiesFactory</span>
+        </a></li><li>
+        <a class="is-flex" href="#使用spring-cloud官方建议的-RibbonClient方式">
+       <!-- <span class="has-mr-6">4.7</span>-->
+        <span>使用spring cloud官方建议的@RibbonClient方式</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#总结">
+       <!-- <span class="has-mr-6">5</span>-->
+        <span>总结</span>
+        </a></li><li>
+        <a class="is-flex" href="#参考文章">
+       <!-- <span class="has-mr-6">6</span>-->
+        <span>参考文章</span>
+        </a></li></ul>
+        </div>
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+        
+            
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+        
+            
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+        
+        </div>
+    
+</div>
+
+                
+
+
+
+<div class="column is-4-tablet is-4-desktop is-3-widescreen is-hidden-touch is-hidden-desktop-only has-order-3 column-right">
+    
+        <div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            本站公告
+        </h3>
+        <div class="widget">
+            <div class="textwidget" style="background-color: #f5f5f5; color: #a86767;border-radius: 21px;box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);padding: 15px;">
+                  <div style="text-align:center">
+                   <span id="busuanzi_container_site_uv">
+          您好，您是<span class="foot-count" id="busuanzi_value_site_uv"></span>位访客
+ </span>
+
+ <div class="time" style="color:#f95b39"> 
+   <script type="text/javascript">
+today=new Date();
+var day; var date; var hello;
+hour=new Date().getHours()
+if(hour < 6)hello='  凌晨好! '
+else if(hour < 9)hello=' 早上好! '
+else if(hour < 12)hello=' 上午好! '
+else if(hour < 14)hello=' 中午好! '
+else if(hour < 17)hello=' 下午好! '
+else if(hour < 19)hello=' 傍晚好! '
+else if(hour < 22)hello=' 晚上好! '
+else {hello='夜深了! '}
+var webUrl = webUrl;
+document.write(' '+hello);
+</script> 
+   <span id="localtime"> <script type="text/javascript">
+　today=new Date(); var tdate,tday, x,year; var x = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五","星期六");
+　　var MSIE=navigator.userAgent.indexOf("MSIE");
+　　if(MSIE != -1)
+　　 year =(today.getFullYear());
+　　else
+　　 year = (today.getYear()+1900);
+　　tdate= year+ "年" + (today.getMonth() + 1 ) + "月" + today.getDate() + "日" + " " + x[today.getDay()];
+　　document.write(tdate); 
+//-->
+</script> </span> 
+  </div> 
+  
+                   <img src="/images/re/fm.png" width="200px" height="263px"><br>
+                   <a href="http://xujin.org/re/01/" style="color:#FF920B">●书籍概述</a>
+                   <a href="http://product.dangdang.com/25348282.html" style="color:#FF920B">●当当购买</a>
+                   <a href="https://item.jd.com/12447280.html" style="color:#FF920B">●京东购买</a>
+                   <p><img src="/images/wxh.png" width="150px" height="150px"><br> 微信扫码加我微信<br></p> 
+                   <p>【Tel:18616365668 QQ:2508203324】</p>
+                   <p>【Spring Cloud中国QQ群①:<a href="#">415028731(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群②:<a href="#">530321604(已满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群③:<a href="#">643970587(未满）</a>】</p>
+                   <p>【Spring Cloud中国QQ群④:<a href="#">666903087(未满）</a>】</p>
+                   <p>加我微信Software_King或者扫描二维码，拉入Spring Cloud中国社区微信群</p><br>
+                   <p>系列文章<br> 
+                   <a href="http://xujin.org/categories/%E8%B7%9F%E6%88%91%E5%AD%A6Spring-Cloud/" style="color: #FF920B">●《跟我学Spring Cloud》</a><br> 
+                   <a href="http://xujin.org/tags/Spring-Cloud-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" style="color:#FF920B">●《Spring Cloud源码分析》</a></p> 
+                   <a href="http://xujin.org/categories/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" style="color:#FF920B">●《并发编程》</a><p></p> 
+                   <p>微信公众号：搜索"xujin"或扫描下面的二维码：<br> <img src="/images/wxgzh.png" width="150px" height="150px"></p> 
+                  </div> 
+           </div> 
+              
+       </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget" id="toc">
+    <div class="card-content">
+        <div class="menu">
+            <h3 class="menu-label">
+                目录
+            </h3>
+            <ul class="menu-list"><li>
+        <a class="is-flex" href="#限流降级设计">
+       <!-- <span class="has-mr-6">1</span>-->
+        <span>限流降级设计</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#场景">
+       <!-- <span class="has-mr-6">1.1</span>-->
+        <span>场景</span>
+        </a></li><li>
+        <a class="is-flex" href="#思路">
+       <!-- <span class="has-mr-6">1.2</span>-->
+        <span>思路</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#工程案例演示">
+       <!-- <span class="has-mr-6">2</span>-->
+        <span>工程案例演示</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#项目结构">
+       <!-- <span class="has-mr-6">2.1</span>-->
+        <span>项目结构</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#案例具体实现">
+       <!-- <span class="has-mr-6">3</span>-->
+        <span>案例具体实现</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#基于权重的实现思路">
+       <!-- <span class="has-mr-6">3.1</span>-->
+        <span>基于权重的实现思路</span>
+        </a></li><li>
+        <a class="is-flex" href="#基于权重的路由测试">
+       <!-- <span class="has-mr-6">3.2</span>-->
+        <span>基于权重的路由测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#基于标签的路由处理">
+       <!-- <span class="has-mr-6">3.3</span>-->
+        <span>基于标签的路由处理</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#基于标签的路由实现思路">
+       <!-- <span class="has-mr-6">3.3.1</span>-->
+        <span>基于标签的路由实现思路</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#基于标签路由的测试">
+       <!-- <span class="has-mr-6">3.4</span>-->
+        <span>基于标签路由的测试</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#伪代码分析实现流程">
+       <!-- <span class="has-mr-6">4</span>-->
+        <span>伪代码分析实现流程</span>
+        </a><ul class="menu-list"><li>
+        <a class="is-flex" href="#伪代码示例">
+       <!-- <span class="has-mr-6">4.1</span>-->
+        <span>伪代码示例</span>
+        </a></li><li>
+        <a class="is-flex" href="#代码示例测试">
+       <!-- <span class="has-mr-6">4.2</span>-->
+        <span>代码示例测试</span>
+        </a></li><li>
+        <a class="is-flex" href="#生产上使用WeightedMetadataRule">
+       <!-- <span class="has-mr-6">4.3</span>-->
+        <span>生产上使用WeightedMetadataRule</span>
+        </a></li><li>
+        <a class="is-flex" href="#手动指定服务策略，">
+       <!-- <span class="has-mr-6">4.4</span>-->
+        <span>手动指定服务策略，</span>
+        </a></li><li>
+        <a class="is-flex" href="#通过声明Irule-spring-bean配置全局负载策略">
+       <!-- <span class="has-mr-6">4.5</span>-->
+        <span>通过声明Irule spring bean配置全局负载策略</span>
+        </a></li><li>
+        <a class="is-flex" href="#继承重写PropertiesFactory">
+       <!-- <span class="has-mr-6">4.6</span>-->
+        <span>继承重写PropertiesFactory</span>
+        </a></li><li>
+        <a class="is-flex" href="#使用spring-cloud官方建议的-RibbonClient方式">
+       <!-- <span class="has-mr-6">4.7</span>-->
+        <span>使用spring cloud官方建议的@RibbonClient方式</span>
+        </a></li></ul></li><li>
+        <a class="is-flex" href="#总结">
+       <!-- <span class="has-mr-6">5</span>-->
+        <span>总结</span>
+        </a></li><li>
+        <a class="is-flex" href="#参考文章">
+       <!-- <span class="has-mr-6">6</span>-->
+        <span>参考文章</span>
+        </a></li></ul>
+        </div>
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            最新文章
+        </h3>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-27T06:00:00.000Z">2018-11-27</time></div>
+                    <a href="/sc/sc2/" class="has-link-black-ter is-size-6">Spring Cloud第二代</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud/">Spring Cloud</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-17T06:00:00.000Z">2018-11-17</time></div>
+                    <a href="/sc/gw/gw10/" class="has-link-black-ter is-size-6">使用Nacos实现Spring Cloud Gateway的动态路由</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-11-03T06:00:00.000Z">2018-11-03</time></div>
+                    <a href="/sc/gw/gw09/" class="has-link-black-ter is-size-6">Spring Cloud Gateway的动态路由实现</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Spring-Cloud-Gateway/">Spring Cloud Gateway</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:59.000Z">2018-10-22</time></div>
+                    <a href="/Getting-Started/" class="has-link-black-ter is-size-6">Getting Started with Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+        <article class="media">
+            
+            <div class="media-content">
+                <div class="content">
+                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2018-10-22T11:23:58.000Z">2018-10-22</time></div>
+                    <a href="/theme/Configuring-Icarus/" class="has-link-black-ter is-size-6">Configuring Icarus</a>
+                    <p class="is-size-7 is-uppercase">
+                        <a class="has-link-grey -link" href="/categories/Configuration/">Configuration</a> / <a class="has-link-grey -link" href="/categories/Configuration/Theme/">Theme</a>
+                    </p>
+                </div>
+            </div>
+        </article>
+        
+    </div>
+</div>
+
+    
+        
+<div class="card widget">
+    <div class="card-content">
+        <h3 class="menu-label">
+            标签云
+        </h3>
+        <a href="/tags/Advanced-Topics/" style="font-size: 10px;">Advanced Topics</a> <a href="/tags/Eureka/" style="font-size: 10px;">Eureka</a> <a href="/tags/Eureka-Server/" style="font-size: 10px;">Eureka Server</a> <a href="/tags/Getting-Started/" style="font-size: 16.25px;">Getting Started</a> <a href="/tags/Java/" style="font-size: 17.5px;">Java</a> <a href="/tags/Jdk/" style="font-size: 12.5px;">Jdk</a> <a href="/tags/Lombok/" style="font-size: 10px;">Lombok</a> <a href="/tags/MyBatis/" style="font-size: 10px;">MyBatis</a> <a href="/tags/Spring-Boot/" style="font-size: 11.25px;">Spring Boot</a> <a href="/tags/Spring-Cloud/" style="font-size: 17.5px;">Spring Cloud</a> <a href="/tags/Spring-Cloud-Config/" style="font-size: 10px;">Spring Cloud Config</a> <a href="/tags/Spring-Cloud-Eureka/" style="font-size: 16.25px;">Spring Cloud Eureka</a> <a href="/tags/Spring-Cloud-Fegin/" style="font-size: 10px;">Spring Cloud Fegin</a> <a href="/tags/Spring-Cloud-Feign/" style="font-size: 10px;">Spring Cloud Feign</a> <a href="/tags/Spring-Cloud-Gateway/" style="font-size: 18.75px;">Spring Cloud Gateway</a> <a href="/tags/Spring-Cloud-Netflix/" style="font-size: 10px;">Spring Cloud Netflix</a> <a href="/tags/Spring-Cloud-Ribbon/" style="font-size: 10px;">Spring Cloud Ribbon</a> <a href="/tags/Spring-Cloud-Sleuth/" style="font-size: 10px;">Spring Cloud Sleuth</a> <a href="/tags/Spring-Cloud-Zuul/" style="font-size: 13.75px;">Spring Cloud Zuul</a> <a href="/tags/Spring-Cloud-源码分析/" style="font-size: 15px;">Spring Cloud 源码分析</a> <a href="/tags/Spring-Cloud自研组件/" style="font-size: 10px;">Spring Cloud自研组件</a> <a href="/tags/Venus-Boot/" style="font-size: 10px;">Venus Boot</a> <a href="/tags/Venus-Framework/" style="font-size: 10px;">Venus Framework</a> <a href="/tags/dincos/" style="font-size: 10px;">dincos</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/http2/" style="font-size: 10px;">http2</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a> <a href="/tags/tools/" style="font-size: 10px;">tools</a> <a href="/tags/中间件/" style="font-size: 10px;">中间件</a> <a href="/tags/云计算SaaS/" style="font-size: 10px;">云计算SaaS</a> <a href="/tags/代码片/" style="font-size: 10px;">代码片</a> <a href="/tags/代码生成器/" style="font-size: 10px;">代码生成器</a> <a href="/tags/全链路监控/" style="font-size: 10px;">全链路监控</a> <a href="/tags/基础架构/" style="font-size: 10px;">基础架构</a> <a href="/tags/多线程/" style="font-size: 15px;">多线程</a> <a href="/tags/实践分享/" style="font-size: 10px;">实践分享</a> <a href="/tags/并发编程/" style="font-size: 15px;">并发编程</a> <a href="/tags/开发工具/" style="font-size: 10px;">开发工具</a> <a href="/tags/微服务/" style="font-size: 10px;">微服务</a> <a href="/tags/数据库连接池/" style="font-size: 10px;">数据库连接池</a> <a href="/tags/沉思录/" style="font-size: 10px;">沉思录</a> <a href="/tags/网关中间件/" style="font-size: 11.25px;">网关中间件</a> <a href="/tags/重新定义/" style="font-size: 10px;">重新定义</a> <a href="/tags/项目经验/" style="font-size: 20px;">项目经验</a>
+    </div>
+</div>
+
+    
+        
+
+<div class="card widget">
+    <div class="card-content">
+        <div class="menu">
+        <h3 class="menu-label">
+            链接
+        </h3>
+        <ul class="menu-list">
+        
+            <li>
+                <a class="level is-mobile" href="https://hexo.io" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">Hexo</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://hexo.io</span>
+                    </span>
+                </a>
+            </li>
+        
+            <li>
+                <a class="level is-mobile" href="https://github.com/ppoffice" target="_blank">
+                    <span class="level-left">
+                        <span class="level-item">PPOffice</span>
+                    </span>
+                    <span class="level-right">
+                        <span class="level-item tag">https://github.com/ppoffice</span>
+                    </span>
+                </a>
+            </li>
+        
+        </ul>
+        </div>
+    </div>
+</div>
+
+
+    
+    
+</div>
+
+            </div>
+        </div>
+    </section>
+    <footer class="footer">
+    <div class="container">
+        <div class="level">
+            <div class="level-start has-text-centered-mobile">
+                <a class="footer-logo is-block has-mb-6" href="/">
+                
+                    <img src="/images/logo.png" alt="" height="28">
+                
+                </a>
+                <p class="is-size-7">
+                &copy; 2018 何鹰/许进&nbsp;
+                Powered by <a href="http://hexo.io/" target="_blank">Hexo</a> & <a href="http://github.com/ppoffice/hexo-theme-icarus">Icarus</a>
+                </p>
+            </div>
+            <div class="outer">
+                <div id="footer-info" class="inner">
+                    &copy;2018 许进<br>
+                    <a href="http://www.miibeian.gov.cn/" target="_blank">滇ICP备14007546号</a>
+                    Powered by <a href="http://blog.xujin.org" target="_blank">许进</a>. 
+                </div>
+                <span id="busuanzi_container_site_pv">
+                 访问量<span class="foot-count" id="busuanzi_value_site_pv"></span>次
+                 </span>
+                 <span class="foot-count" id="showDays"></span>
+            </div>
+            <div class="level-end">
+            
+                <div class="field has-addons is-flex-center-mobile has-mt-5-mobile is-flex-wrap is-flex-middle">
+                
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Creative Commons" href="https://creativecommons.org/">
+                        
+                        <i class="fab fa-creative-commons"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/">
+                        
+                        <i class="fab fa-creative-commons-by"></i>
+                        
+                    </a>
+                </p>
+                
+                <p class="control">
+                    <a class="button is-white is-large" target="_blank" title="Download on GitHub" href="http://github.com/ppoffice/hexo-theme-icarus">
+                        
+                        <i class="fab fa-github"></i>
+                        
+                    </a>
+                </p>
+                
+                </div>
+            
+            </div>
+        </div>
+    </div>
+</footer>
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+ <script>
+        var birthDay = new Date('1/20/2015 18:34:23');
+        setInterval(function() {
+            var now = new Date();
+            var num_1 = 1000 * 60 * 60 * 24;
+            var num_2 = 1000 * 60 * 60;
+            var duration = now.getTime() - birthDay.getTime();
+            var total = Math.floor(duration / num_1);
+            var hour = Math.floor((duration % num_1) / num_2);
+            var minute = Math.floor(((duration % num_1) % num_2) / (1000 * 60));
+            var second = Math.floor((((duration % num_1) % num_2) % (1000 * 60)) / 1000);
+            document.getElementById("showDays").innerHTML = "本站已运行" + total + "天" + hour + '时' + minute + '分' + second + '秒';
+        }, 1000);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script>
+<script>moment.locale("zh-CN");</script>
+
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js"></script>
+    <script>
+        (function ($) {
+            $(document).ready(function () {
+                if (typeof($.fn.lightGallery) === 'function') {
+                    $('.article').lightGallery({ selector: '.gallery-item' });
+                }
+                if (typeof($.fn.justifiedGallery) === 'function') {
+                    $('.justified-gallery').justifiedGallery();
+                }
+            });
+        })(jQuery);
+    </script>
+    
+
+    
+    
+    
+    <div id="outdated">
+        <h6>Your browser is out-of-date!</h6>
+        <p>Update your browser to view this website correctly. <a id="btnUpdateBrowser" href="http://outdatedbrowser.com/">Update my browser now </a></p>
+        <p class="last"><a href="#" id="btnCloseUpdateBrowser" title="Close">&times;</a></p>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            // plugin function, place inside DOM ready function
+            outdatedBrowser({
+                bgColor: '#f25648',
+                color: '#ffffff',
+                lowerThan: 'flex'
+            })
+        });
+    </script>
+    
+
+    
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/animejs@2.2.0/anime.js"></script>
+    <script>
+    function isIE() {
+        var ua = window.navigator.userAgent;
+        var msie = ua.indexOf('MSIE ');
+        var trident = ua.indexOf('Trident/');
+        return (msie > 0 || trident > 0);
+    }
+
+    $(document).ready(function () {
+        $('body>.navbar,body>.section,body>.footer').css('opacity', 1);
+        if (!isIE()) {
+            ['.column-main > .card',
+             '.column-left > .card',
+             '.column-right > .card'].map(function(target) {
+                anime({
+                    targets: target,
+                    scale: [0.8, 1],
+                    opacity: [0, 1],
+                    duration: 300,
+                    easing: 'easeOutSine',
+                    delay: function(el, i, l) {
+                        return i * 100;
+                    }
+                })
+            });
+
+            anime({
+                targets: '.navbar-main',
+                translateY: [-100, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutSine'
+            });
+        }
+    });
+    </script>
+    
+
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.5/unpacked/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script>
+    MathJax.Hub.Config({
+        "HTML-CSS": {matchFontHeight: false},
+        SVG: {matchFontHeight: false},
+        CommonHTML: {matchFontHeight: false}
+    });
+</script>
+
+    
+    
+
+<a id="back-to-top" title="回到顶端" href="javascript:;">
+    <i class="fas fa-chevron-up"></i>
+</a>
+<style>
+#back-to-top {
+    position: fixed;
+    padding: 8px 0;
+    transition: 0.4s ease opacity, 0.4s ease width, 0.4s ease transform, 0.4s ease border-radius;
+    opacity: 0;
+    line-height: 24px;
+    outline: none;
+    transform: translateY(120px);
+}
+#back-to-top.fade-in {
+    opacity: 1;
+}
+#back-to-top.rise-up {
+    transform: translateY(0);
+}
+</style>
+<script src="/js/back-to-top.js"></script>
+
+
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+    
+
+
+<script src="/js/main.js"></script>
+
+    
+    <div class="searchbox ins-search">
+    <div class="searchbox-container ins-search-container">
+        <div class="searchbox-input-wrapper">
+            <input type="text" class="searchbox-input ins-search-input" placeholder="想要查找什么...">
+            <span class="searchbox-close ins-close ins-selectable"><i class="fa fa-times-circle"></i></span>
+        </div>
+        <div class="searchbox-result-wrapper ins-section-wrapper">
+            <div class="ins-section-container"></div>
+        </div>
+    </div>
+</div>
+<script>
+    (function (window) {
+        var INSIGHT_CONFIG = {
+            TRANSLATION: {
+                POSTS: '文章',
+                PAGES: '页面',
+                CATEGORIES: '分类',
+                TAGS: '标签',
+                UNTITLED: '(无标题)',
+            },
+            CONTENT_URL: '/content.json',
+        };
+        window.INSIGHT_CONFIG = INSIGHT_CONFIG;
+    })(window);
+</script>
+<script src="/js/insight.js"></script>
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/insight.css">
+    
+</body>
+</html>
